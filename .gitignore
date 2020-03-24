@@ -1,0 +1,15 @@
+# Python
+.python-version
+.ipynb_checkpoints/**
+*.pyc
+/__pycache__/**
+prototyping.ipynb
+# resource folder
+/Resources/**
+# sim inputs and outputs
+**/results/**
+**.json
+# misc
+**.DS_Store
+
+
