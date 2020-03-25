@@ -34,4 +34,4 @@ class Outputs:
         data[:,3] = np.sum(self.daily_states[:,:,RECOVERED], axis=1)
         data[:,4] = np.sum(self.daily_mortality, axis=1)
         data[:,5] = np.sum(self.daily_transmission, axis=1)
-        np.savetxt(file, np.transpose(data), fmt="%.6f", delimiter="\t", header=header)
+        np.savetxt(file, data, fmt="%.6f", delimiter="\t", header=header)

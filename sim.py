@@ -42,7 +42,7 @@ if __name__ == "__main__" or __name__ == "builtins":
         # run the sim!
         for input_file in input_files:            
             sim_state = SimState(read_inputs(input_file))
-            out_file = os.path.splitext(os.path.split(input_file)[1])[0] + ".csv"
+            out_file = os.path.splitext(os.path.split(input_file)[1])[0] + ".tsv"
             print("running " + input_file)
             sim_state.run()
             sim_state.outputs.write_outputs(os.path.join(results_directory, out_file))
