@@ -33,7 +33,7 @@ if __name__ == "__main__" or __name__ == "builtins":
     if not input_files:
         template = os.path.join(sys.argv[1], "covid_input_template.json")
         print("No input files detected, generating input template")
-        create_input_file(file)
+        create_input_file("template.json")
     else: 
         # create results folder
         results_directory = os.path.join(folder, "results")
