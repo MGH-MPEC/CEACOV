@@ -9,7 +9,6 @@ from enums import *
 from inputs import *
 from patient import *
 from outputs import *
-import numpy as np
 import os, sys
 from glob import glob
 

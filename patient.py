@@ -36,12 +36,6 @@ def prob_to_rate(prob):
 
 # helper functions for updating patient state (in loop, might get turned to Cython)
 
-def calculate_transmissions(patient, inputs):
-    if patient[FLAGS] & IS_ALIVE:
-        transmissions = inputs.trans_prob[patient[SUBPOPULATION], patient[DISEASE_STATE]]
-        return transmissions
-
-
 def roll_for_incidence(patient, transmissions, inputs):
     # need to convert to probability!
     prob_exposure = rate_to_prob(transmissions / inputs.cohort_size)
@@ -49,14 +43,12 @@ def roll_for_incidence(patient, transmissions, inputs):
 
 
 def roll_for_transition(patient, inputs):
+    intv = patient[INTERVENTION]
     dstate = patient[DISEASE_STATE]
-    subpop = patient[SUBPOPULATION]
-    transmission_dist = np.copy(inputs.progression_probs[subpop, dstate, :])
-    # make sure state transition probabilites are normalized
-    transmission_dist[dstate] = 0
-    transmission_dist[dstate] = 1.0 - np.sum(transmission_dist)
-    patient[DISEASE_STATE] = draw_from_dist(transmission_dist)
-    if patient[DISEASE_STATE] != dstate: # state changed
+    severity = patient[DISEASE_PROGRESSION]
+    prob_trans = inputs.progression_probs[intv, severity, dstate]
+    if np.random.random() < prob_trans: # state changed
+        patient[DISEASE_STATE] = PROGRESSION_PATHS[severity][dstate]
         patient[D_STATE_TIME] = 0
 
 def roll_for_mortality(patient, inputs):
@@ -92,11 +84,13 @@ class SimState():
             patient[DISEASE_STATE] = dstate
             if (SUSCEPTABLE < dstate) and (dstate < RECOVERED):
                 patient[FLAGS] = patient[FLAGS] | IS_INFECTED
-            if (patient[FLAGS] & IS_INFECTED):
+                progression = draw_from_dist(self.inputs.severity_dist[subpop])
+                patient[DISEASE_PROGRESSION] = progression if progression >= (dstate - MILD) else dstate
                 self.transmissions += calculate_transmissions(patient, self.inputs) 
 
     def step(self):
         """performs daily patient updates"""
+        print(f"simulating day {self.day}")
         # local variables for quick access
         newtransmissions = np.zeros(SUBPOPULATIONS_NUM, dtype=float)
         oldtransmissions = self.transmissions
@@ -106,24 +100,29 @@ class SimState():
         for patient in self.cohort:
             if not (patient[FLAGS] & IS_ALIVE):     # if patient is dead, nothing to do
                 continue
-            # calculate tomorrow's potential transmissions
-            if (patient[FLAGS] & IS_INFECTED):
-                newtransmissions[patient[SUBPOPULATION]] += calculate_transmissions(patient, self.inputs)
             # update disease state
             if patient[DISEASE_STATE] == SUSCEPTABLE:
                 if roll_for_incidence(patient, oldtransmissions, self.inputs):
                     patient[DISEASE_STATE] = INCUBATION
                     patient[D_STATE_TIME] = 0
+                    patient[DISEASE_PROGRESSION] = draw_from_dist(self.inputs.severity_dist[patient[SUBPOPULATION]])
             else:
                 roll_for_transition(patient, self.inputs)
+            # roll for mortality
             if patient[DISEASE_STATE] == CRITICAL:
                 roll_for_mortality(patient, self.inputs)
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
+                # calculate tomorrow's exposures
+                if (patient[FLAGS] & IS_INFECTED):
+                    newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[patient[INTERVENTION], patient[DISEASE_STATE]]
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
             else: # must have died this month
                 mort_tracker[patient[SUBPOPULATION]] += 1
-        self.outputs.log_daily_state(self.day, state_tracker, newtransmissions, mort_tracker)
+            
+
+
+        self.outputs.log_daily_state(self.day, state_tracker, oldtransmissions, mort_tracker)
         self.transmissions = np.sum(newtransmissions)
         self.day += 1
 
