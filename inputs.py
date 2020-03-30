@@ -51,6 +51,8 @@ def generate_transmission_inputs():
     transm_in = {
     "transmission rate": {"for " + intv: {"while " + dstate: 0
             for dstate in DISEASE_STATE_STRS[MILD:RECOVERED]}
+        for intv in INTERVENTION_STRS},
+    "rate multipliers": {"for " + intv: 1
         for intv in INTERVENTION_STRS}
     }
     return transm_in
@@ -107,9 +109,13 @@ class Inputs():
                         self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - MILD]
         self.mortality_probs = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
         
-        #transmission inputs
+        # transmission inputs
         transm_params = param_dict["transmissions"]
+        trans_mults = np.asarray(dict_to_array(transm_params["rate multipliers"]), dtype=float)
         self.trans_prob[:,MILD:RECOVERED] = np.asarray(dict_to_array(transm_params["transmission rate"]), dtype=float)
+        # apply transmission mults
+        for i in range(INTERVENTIONS_NUM):
+            self.trans_prob[i] *= trans_mults[i]
 
 
 #creates blank input file template

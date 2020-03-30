@@ -85,7 +85,7 @@ class SimState():
             if (SUSCEPTABLE < dstate) and (dstate < RECOVERED):
                 patient[FLAGS] = patient[FLAGS] | IS_INFECTED
                 progression = draw_from_dist(self.inputs.severity_dist[subpop])
-                patient[DISEASE_PROGRESSION] = progression if progression >= (dstate - MILD) else dstate
+                patient[DISEASE_PROGRESSION] = progression if progression >= (dstate - MILD) else (dstate - MILD)
                 # transmissions for day 0
                 self.transmissions += self.inputs.trans_prob[patient[INTERVENTION], patient[dstate]] 
 
