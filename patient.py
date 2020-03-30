@@ -86,11 +86,12 @@ class SimState():
                 patient[FLAGS] = patient[FLAGS] | IS_INFECTED
                 progression = draw_from_dist(self.inputs.severity_dist[subpop])
                 patient[DISEASE_PROGRESSION] = progression if progression >= (dstate - MILD) else dstate
-                self.transmissions += calculate_transmissions(patient, self.inputs) 
+                # transmissions for day 0
+                self.transmissions += inputs.trans_prob[patient[INTERVENTION], patient[dstate]] 
 
     def step(self):
         """performs daily patient updates"""
-        print(f"simulating day {self.day}")
+        # print(f"simulating day {self.day}")
         # local variables for quick access
         newtransmissions = np.zeros(SUBPOPULATIONS_NUM, dtype=float)
         oldtransmissions = self.transmissions
