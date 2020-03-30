@@ -87,7 +87,7 @@ class SimState():
                 progression = draw_from_dist(self.inputs.severity_dist[subpop])
                 patient[DISEASE_PROGRESSION] = progression if progression >= (dstate - MILD) else dstate
                 # transmissions for day 0
-                self.transmissions += inputs.trans_prob[patient[INTERVENTION], patient[dstate]] 
+                self.transmissions += self.inputs.trans_prob[patient[INTERVENTION], patient[dstate]] 
 
     def step(self):
         """performs daily patient updates"""
@@ -116,7 +116,7 @@ class SimState():
             if patient[FLAGS] & IS_ALIVE:
                 # calculate tomorrow's exposures
                 if (patient[FLAGS] & IS_INFECTED):
-                    newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[patient[INTERVENTION], patient[DISEASE_STATE]]
+                    newtransmissions[patient[SUBPOPULATION]] += self.inputs.trans_prob[patient[INTERVENTION], patient[DISEASE_STATE]]
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
             else: # must have died this month
                 mort_tracker[patient[SUBPOPULATION]] += 1

@@ -30,7 +30,7 @@ IS_ALIVE, IS_INFECTED, IS_DIAGNOSED = map(lambda x: 2 ** x, range(FLAGS_NUM))
 
 # GENDER_STRS = ("female", "male")
 
-AGE_CATEGORY_STRS = ("0-19y", "20-59y", "≥60y")
+AGE_CATEGORY_STRS = ("0-19y", "20-59y", ">=60y")
 
 # HIV_STATUS_STRS = ("HIV+", "no HIV")
 
