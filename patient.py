@@ -49,13 +49,36 @@ def roll_for_transition(patient, inputs):
     prob_trans = inputs.progression_probs[intv, severity, dstate]
     if np.random.random() < prob_trans: # state changed
         patient[DISEASE_STATE] = PROGRESSION_PATHS[severity][dstate]
-        patient[D_STATE_TIME] = 0
+        patient[FLAGS] = patient[FLAGS] & ~(PRESENTED_THIS_DSTATE)
 
 def roll_for_mortality(patient, inputs):
     subpop = patient[SUBPOPULATION]
     prob_mort = inputs.mortality_probs[subpop]
     if np.random.random() < prob_mort:
         patient[FLAGS] = patient[FLAGS] & (~IS_ALIVE)
+        return True
+    else:
+        return False
+
+def roll_for_presentation(patient, inputs):
+    if np.random.random() < inputs.prob_present[patient[INTERVENTION]][patient[DISEASE_STATE]]:
+        patient[FLAGS] = patient[FLAGS] | PRESENTED_THIS_DSTATE
+        if patient[DISEASE_STATE] in DISEASE_STATES[MILD:RECUPERATION+1]:
+            patient[OBSERVED_STATE] = patient[DISEASE_STATE]-MILD+1
+            patient[OBSERVED_STATE_TIME] = 0
+        else:
+            patient[OBSERVED_STATE] = SYMP_NONE
+        return True
+    else:
+        return False
+
+def roll_for_testing(patient, inputs):
+    if np.random.random() < inputs.prob_receive_test[patient[INTERVENTION]][patient[OBSERVED_STATE]]:
+        num = inputs.test_number[patient[INTERVENTION]][patient[OBSERVED_STATE]]
+        patient[FLAGS] = patient[FLAGS] | HAS_PENDING_TEST
+        # bitwise nonesense to set pending result flags
+        patient[FLAGS] | (np.random.random() < inputs.test_characteristics[num][patient[DISEASE_STATE]]) << PENDING_TEST_RESULT
+        patient[TIME_TO_TEST_RETURN] = inputs.test_return_delay[num]
         return True
     else:
         return False
@@ -82,8 +105,7 @@ class SimState():
             # draw disease state
             dstate = draw_from_dist(self.inputs.dstate_dist)
             patient[DISEASE_STATE] = dstate
-            if (SUSCEPTABLE < dstate) and (dstate < RECOVERED):
-                patient[FLAGS] = patient[FLAGS] | IS_INFECTED
+            if SUSCEPTABLE < dstate:
                 progression = draw_from_dist(self.inputs.severity_dist[subpop])
                 patient[DISEASE_PROGRESSION] = progression if progression >= (dstate - MILD) else (dstate - MILD)
                 # transmissions for day 0
@@ -97,33 +119,51 @@ class SimState():
         oldtransmissions = self.transmissions
         state_tracker = np.zeros((SUBPOPULATIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         mort_tracker = np.zeros(SUBPOPULATIONS_NUM, dtype=int)
+        intv_tracker = np.zeros(INTERVENTIONS_NUM, dtype=int)
+        daily_tests = 0
+        new_infections = 0
+        inputs = self.inputs
         # loop over cohort
         for patient in self.cohort:
             if not (patient[FLAGS] & IS_ALIVE):     # if patient is dead, nothing to do
                 continue
+            # update treatment/testing state
+            if patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, inputs):
+                if patient[OBSERVED_STATE_TIME] % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0:
+                    if roll_for_testing(patient, inputs):
+                        daily_tests += 1
+            if patient[FLAGS] & HAS_PENDING_TEST:
+                if patient[TIME_TO_TEST_RETURN] == 0:
+                    # perform test teturn updates
+                    patient[FLAGS] = patient[FLAGS] & (~HAS_PENDING_TEST)
+                    result = bool(patient[FLAGS] & PENDING_TEST_RESULT)
+                    patient[INTERVENTION] = inputs.switch_on_test_result[patient[INTERVENTION]][patient[OBSERVED_STATE]][int(result)]
+                else:
+                    patient[TIME_TO_TEST_RETURN] -= 1
+            patient[OBSERVED_STATE_TIME] += 1
+
             # update disease state
             if patient[DISEASE_STATE] == SUSCEPTABLE:
-                if roll_for_incidence(patient, oldtransmissions, self.inputs):
+                if roll_for_incidence(patient, oldtransmissions, inputs):
                     patient[DISEASE_STATE] = INCUBATION
-                    patient[D_STATE_TIME] = 0
-                    patient[DISEASE_PROGRESSION] = draw_from_dist(self.inputs.severity_dist[patient[SUBPOPULATION]])
+                    patient[DISEASE_PROGRESSION] = draw_from_dist(inputs.severity_dist[patient[SUBPOPULATION]])
+                    new_infections += 1
             else:
-                roll_for_transition(patient, self.inputs)
+                roll_for_transition(patient, inputs)
             # roll for mortality
             if patient[DISEASE_STATE] == CRITICAL:
-                roll_for_mortality(patient, self.inputs)
+                roll_for_mortality(patient, inputs)
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
                 # calculate tomorrow's exposures
-                if (patient[FLAGS] & IS_INFECTED):
-                    newtransmissions[patient[SUBPOPULATION]] += self.inputs.trans_prob[patient[INTERVENTION], patient[DISEASE_STATE]]
+                newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[patient[INTERVENTION], patient[DISEASE_STATE]]
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
+                intv_tracker[patient[INTERVENTION]] += 1
             else: # must have died this month
                 mort_tracker[patient[SUBPOPULATION]] += 1
-            
 
 
-        self.outputs.log_daily_state(self.day, state_tracker, oldtransmissions, mort_tracker)
+        self.outputs.log_daily_state(self.day, state_tracker, oldtransmissions, mort_tracker, new_infections, intv_tracker, daily_tests)
         self.transmissions = np.sum(newtransmissions)
         self.day += 1
 

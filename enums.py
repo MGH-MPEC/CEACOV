@@ -15,16 +15,18 @@ class InvalidParamError(Exception):
 
 # Meta Params
 
-# State var indices
-NUM_STATE_VARS = 6
+MODEL_VERSION = "v0.3"
 
-STATE_VARS = FLAGS, SUBPOPULATION, DISEASE_STATE, D_STATE_TIME, DISEASE_PROGRESSION, INTERVENTION = range(NUM_STATE_VARS)
+# State var indices
+NUM_STATE_VARS = 8
+
+STATE_VARS = FLAGS, SUBPOPULATION, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_TEST_RETURN = range(NUM_STATE_VARS)
 
 # Flags (bitwise flags in powers of 2)
 
-FLAGS_NUM = 3
+FLAGS_NUM = 4
 
-IS_ALIVE, IS_INFECTED, IS_DIAGNOSED = map(lambda x: 2 ** x, range(FLAGS_NUM))
+IS_ALIVE, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT = map(lambda x: 2 ** x, range(FLAGS_NUM))
 
 # Demographic State
 
@@ -79,6 +81,21 @@ INTERVENTIONS = range(INTERVENTIONS_NUM)
 
 INTERVENTION_STRS = tuple(["no intervention"] + [f"intervention {i}" for i in range(1,INTERVENTIONS_NUM)])
 
+
+OBSERVED_STATES_NUM = 6
+
+OBSERVED_STATES = SYMP_NONE, SYMP_MILD, SYMP_MODERATE, SYMP_SEVERE, SYMP_CRITICAL, SYMP_RECUPERATION = range(OBSERVED_STATES_NUM)
+
+OBSERVED_STATE_STRS = ("none", "mild", "moderate", "severe", "critical", "recuperation")
+
+# Testing
+
+TEST_FLAGS_NUM = 6
+
+TESTS_NUM = 4
+
+TESTS = range(TESTS_NUM)
+
 # Outcomes
 
-# DAILY_OUTCOMES_NUM = 
+DAILY_OUTCOME_STRS = ["day#"] +  list(DISEASE_STATE_STRS) + ["new infections", "dead", "exposures"] + list(INTERVENTION_STRS) + ["tests"]

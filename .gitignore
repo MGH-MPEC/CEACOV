@@ -9,6 +9,7 @@ prototyping.ipynb
 # sim inputs and outputs
 **/results/**
 **.json
+**.tsv
 # misc
 **.DS_Store
 
