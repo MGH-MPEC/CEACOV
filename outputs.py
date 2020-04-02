@@ -41,5 +41,5 @@ class Outputs:
         data[:,index["dead"]] = np.cumsum(np.sum(self.daily_mortality, axis=1))
         data[:,index["exposures"]] = np.sum(self.daily_transmission, axis=1)
         data[:,index["no intervention"]:index["no intervention"] + INTERVENTIONS_NUM] = self.daily_interventions
-        data[:,index["tests"]] = np.cumsum(self.daily_tests, axis=1)
+        data[:,index["tests"]] = self.daily_tests
         np.savetxt(file, data, fmt="%.6f", delimiter="\t", header=header)
