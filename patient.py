@@ -111,7 +111,7 @@ class SimState():
             # initialize paths (even for susceptables)
             progression = draw_from_dist(self.inputs.severity_dist[subpop])
             patient[DISEASE_PROGRESSION] = progression
-            if (SUSCEPTABLE < dstate) and (dstate < RECOVERED):
+            if (INCUBATION < dstate) and (dstate < RECOVERED):
                 if dstate == RECUPERATION:
                     patient[DISEASE_PROGRESSION] = TO_CRITICAL
                 elif progression > (dstate - MILD):
