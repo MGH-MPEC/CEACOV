@@ -42,12 +42,14 @@ def roll_for_incidence(patient, transmissions, inputs):
     return (np.random.random() < prob_exposure)
 
 
-def roll_for_transition(patient, inputs):
+def roll_for_transition(patient, state_tracker, inputs):
     intv = patient[INTERVENTION]
     dstate = patient[DISEASE_STATE]
     severity = patient[DISEASE_PROGRESSION]
     prob_trans = inputs.progression_probs[intv, severity, dstate]
     if np.random.random() < prob_trans: # state changed
+        new_state = PROGRESSION_PATHS[severity][dstate]
+        state_tracker[new_state] += 1
         patient[DISEASE_STATE] = PROGRESSION_PATHS[severity][dstate]
         patient[FLAGS] = patient[FLAGS] & ~(PRESENTED_THIS_DSTATE)
 
@@ -91,6 +93,7 @@ class SimState():
         self.transmissions = 0
         self.inputs = inputs
         self.outputs = Outputs(inputs)
+        self.cumulative_state_tracker = np.zeros(DISEASE_STATES_NUM, dtype=int)
 
     def initialize_cohort(self):
         # save relevant dists as locals
@@ -105,11 +108,22 @@ class SimState():
             # draw disease state
             dstate = draw_from_dist(self.inputs.dstate_dist)
             patient[DISEASE_STATE] = dstate
-            if SUSCEPTABLE < dstate:
-                progression = draw_from_dist(self.inputs.severity_dist[subpop])
-                patient[DISEASE_PROGRESSION] = progression if progression >= (dstate - MILD) else (dstate - MILD)
-                # transmissions for day 0
-            self.transmissions += self.inputs.trans_prob[patient[INTERVENTION],patient[dstate]] 
+            # initialize paths (even for susceptables)
+            progression = draw_from_dist(self.inputs.severity_dist[subpop])
+            patient[DISEASE_PROGRESSION] = progression
+            if (SUSCEPTABLE < dstate) and (dstate < RECOVERED):
+                if dstate == RECUPERATION:
+                    patient[DISEASE_PROGRESSION] = TO_CRITICAL
+                elif progression > (dstate - MILD):
+                    patient[DISEASE_PROGRESSION] = (dstate - MILD)
+            # transmissions for day 0
+            self.transmissions += self.inputs.trans_prob[patient[INTERVENTION],patient[dstate]]
+            # cumulative state tracking
+            if dstate < RECOVERED:
+                self.cumulative_state_tracker[0:dstate+1] += 1
+            else:
+                self.cumulative_state_tracker[0:progression+3] += 1
+                self.cumulative_state_tracker[-1] += 1
 
     def step(self):
         """performs daily patient updates"""
@@ -120,7 +134,6 @@ class SimState():
         mort_tracker = np.zeros(SUBPOPULATIONS_NUM, dtype=int)
         intv_tracker = np.zeros(INTERVENTIONS_NUM, dtype=int)
         daily_tests = 0
-        new_infections = 0
         inputs = self.inputs
         # loop over cohort
         for patient in self.cohort:
@@ -145,10 +158,9 @@ class SimState():
             if patient[DISEASE_STATE] == SUSCEPTABLE:
                 if roll_for_incidence(patient, self.transmissions, inputs):
                     patient[DISEASE_STATE] = INCUBATION
-                    patient[DISEASE_PROGRESSION] = draw_from_dist(inputs.severity_dist[patient[SUBPOPULATION]])
-                    new_infections += 1
+                    self.cumulative_state_tracker[INCUBATION] += 1
             else:
-                roll_for_transition(patient, inputs)
+                roll_for_transition(patient, self.cumulative_state_tracker, inputs)
             # roll for mortality
             if patient[DISEASE_STATE] == CRITICAL:
                 roll_for_mortality(patient, inputs)
@@ -156,17 +168,17 @@ class SimState():
             if patient[FLAGS] & IS_ALIVE:
                 # calculate tomorrow's exposures
                 newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[patient[INTERVENTION]][patient[DISEASE_STATE]]
-
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
                 intv_tracker[patient[INTERVENTION]] += 1
             else: # must have died this month
                 mort_tracker[patient[SUBPOPULATION]] += 1
 
-        self.outputs.log_daily_state(self.day, state_tracker, newtransmissions, mort_tracker, new_infections, intv_tracker, daily_tests)
+        self.outputs.log_daily_state(self.day, state_tracker, self.cumulative_state_tracker, newtransmissions, mort_tracker, intv_tracker, daily_tests)
         self.transmissions = np.sum(newtransmissions)
         self.day += 1
 
     def run(self):
+        np.random.seed(0)
         self.initialize_cohort()
         for i in range(self.inputs.time_horizon):
             self.step()
