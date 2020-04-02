@@ -134,6 +134,7 @@ class SimState():
         mort_tracker = np.zeros(SUBPOPULATIONS_NUM, dtype=int)
         intv_tracker = np.zeros(INTERVENTIONS_NUM, dtype=int)
         daily_tests = 0
+        new_infections = 0
         inputs = self.inputs
         # loop over cohort
         for patient in self.cohort:
@@ -159,6 +160,7 @@ class SimState():
                 if roll_for_incidence(patient, self.transmissions, inputs):
                     patient[DISEASE_STATE] = INCUBATION
                     self.cumulative_state_tracker[INCUBATION] += 1
+                    new_infections += 1
             else:
                 roll_for_transition(patient, self.cumulative_state_tracker, inputs)
             # roll for mortality
@@ -173,7 +175,7 @@ class SimState():
             else: # must have died this month
                 mort_tracker[patient[SUBPOPULATION]] += 1
 
-        self.outputs.log_daily_state(self.day, state_tracker, self.cumulative_state_tracker, newtransmissions, mort_tracker, intv_tracker, daily_tests)
+        self.outputs.log_daily_state(self.day, state_tracker, self.cumulative_state_tracker, newtransmissions, new_infections, mort_tracker, intv_tracker, daily_tests)
         self.transmissions = np.sum(newtransmissions)
         self.day += 1
 

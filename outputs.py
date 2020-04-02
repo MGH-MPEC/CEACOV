@@ -16,12 +16,14 @@ class Outputs:
         self.daily_mortality = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM), dtype=int)
         self.daily_interventions = np.zeros((inputs.time_horizon, INTERVENTIONS_NUM), dtype=int)
         self.daily_tests = np.zeros(inputs.time_horizon, dtype=int)
+        self.daily_new_infections = np.zeros(inputs.time_horizon, dtype=int)
 #        self.daily_costs = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM), dtype=float)
         self.inputs = inputs
     # record statistics at end of day, called in step
-    def log_daily_state(self, day, states, cumulative, transmissions, mortality, interventions, tests):
+    def log_daily_state(self, day, states, cumulative, transmissions, infections, mortality, interventions, tests):
         self.daily_states[day, :, :] = states
         self.daily_transmission[day, :] = transmissions
+        self.daily_new_infections[day] = infections
         self.daily_mortality[day, :] = mortality
         self.daily_tests[day] = tests
         self.daily_interventions[day,:] = interventions
@@ -38,7 +40,8 @@ class Outputs:
         data[:,index["day#"]] = np.arange(np.size(data[:,0]))
         data[:,1:1+DISEASE_STATES_NUM] = np.sum(self.daily_states[:,:,:], axis=1)
         data[:,index["cumulative mild"]:index["cumulative mild"] + 4] = self.cumulative_states[:,MILD:MILD+4]
-        # data[:,index["cumulative infections"]] = np.full(self.inputs.time_horizon, self.inputs.cohort_size) - self.daily_states[SUSCEPTABLE] - self.daily_states[RECOVERED] - np.cumsum(self.mortality, axis=1)
+        data[:,index["new infections"]] = self.daily_new_infections
+        data[:,index["cumulative infections"]] = np.full(self.inputs.time_horizon, self.inputs.cohort_size, dtype=int) - np.sum(self.daily_states[:,:,SUSCEPTABLE], axis=1)
         data[:,index["dead"]] = np.cumsum(np.sum(self.daily_mortality, axis=1))
         data[:,index["exposures"]] = np.sum(self.daily_transmission, axis=1)
         data[:,index["no intervention"]:index["no intervention"] + INTERVENTIONS_NUM] = self.daily_interventions
