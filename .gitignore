@@ -12,5 +12,6 @@ prototyping.ipynb
 **.tsv
 # misc
 **.DS_Store
+/test/**
 
 

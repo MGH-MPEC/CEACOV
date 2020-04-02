@@ -58,7 +58,7 @@ DISEASE_PROGRESSIONS_NUM = 4
 
 DISEASE_PROGRESSIONS = TO_MILD, TO_MODERATE, TO_SEVERE, TO_CRITICAL = range(DISEASE_PROGRESSIONS_NUM)
 
-DISEASE_PROGRESSION_STRS = DISEASE_STATE_STRS[MILD:RECUPERATION]
+DISEASE_PROGRESSIONS_STRS = ("mild", "moderate", "severe", "critical")
 
 PROGRESSION_PATHS = np.array([[0, MILD, RECOVERED, 0, 0, 0, 0, 0],
          					  [0, MILD, MODERATE, RECOVERED, 0, 0, 0, 0],
@@ -98,4 +98,4 @@ TESTS = range(TESTS_NUM)
 
 # Outcomes
 
-DAILY_OUTCOME_STRS = ["day#"] +  list(DISEASE_STATE_STRS) + ["infections", "dead", "exposures"] + list(INTERVENTION_STRS) + ["tests"]
+DAILY_OUTCOME_STRS = ["day#"] +  list(DISEASE_STATE_STRS) + [f"cumulative {state}" for state in DISEASE_PROGRESSIONS_STRS] + ["cumulative infections", "dead", "exposures"] + list(INTERVENTION_STRS) + ["tests"]
