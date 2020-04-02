@@ -37,9 +37,9 @@ class Outputs:
         data = np.zeros((self.inputs.time_horizon, len(outcomes)), dtype=float)
         data[:,index["day#"]] = np.arange(np.size(data[:,0]))
         data[:,1:1+DISEASE_STATES_NUM] = np.sum(self.daily_states[:,:,:], axis=1)
-        data[:,index["new infections"]] = self.daily_new_infections
+        data[:,index["infections"]] = np.cumsum(self.daily_new_infections)
         data[:,index["dead"]] = np.cumsum(np.sum(self.daily_mortality, axis=1))
         data[:,index["exposures"]] = np.sum(self.daily_transmission, axis=1)
         data[:,index["no intervention"]:index["no intervention"] + INTERVENTIONS_NUM] = self.daily_interventions
-        data[:,index["tests"]] = self.daily_tests 
+        data[:,index["tests"]] = np.cumsum(self.daily_tests, axis=1)
         np.savetxt(file, data, fmt="%.6f", delimiter="\t", header=header)

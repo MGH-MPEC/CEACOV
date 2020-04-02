@@ -109,14 +109,13 @@ class SimState():
                 progression = draw_from_dist(self.inputs.severity_dist[subpop])
                 patient[DISEASE_PROGRESSION] = progression if progression >= (dstate - MILD) else (dstate - MILD)
                 # transmissions for day 0
-                self.transmissions += self.inputs.trans_prob[patient[INTERVENTION], patient[dstate]] 
+            self.transmissions += self.inputs.trans_prob[patient[INTERVENTION],patient[dstate]] 
 
     def step(self):
         """performs daily patient updates"""
         # print(f"simulating day {self.day}")
         # local variables for quick access
         newtransmissions = np.zeros(SUBPOPULATIONS_NUM, dtype=float)
-        oldtransmissions = self.transmissions
         state_tracker = np.zeros((SUBPOPULATIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         mort_tracker = np.zeros(SUBPOPULATIONS_NUM, dtype=int)
         intv_tracker = np.zeros(INTERVENTIONS_NUM, dtype=int)
@@ -144,7 +143,7 @@ class SimState():
 
             # update disease state
             if patient[DISEASE_STATE] == SUSCEPTABLE:
-                if roll_for_incidence(patient, oldtransmissions, inputs):
+                if roll_for_incidence(patient, self.transmissions, inputs):
                     patient[DISEASE_STATE] = INCUBATION
                     patient[DISEASE_PROGRESSION] = draw_from_dist(inputs.severity_dist[patient[SUBPOPULATION]])
                     new_infections += 1
@@ -156,14 +155,14 @@ class SimState():
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
                 # calculate tomorrow's exposures
-                newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[patient[INTERVENTION], patient[DISEASE_STATE]]
+                newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[patient[INTERVENTION]][patient[DISEASE_STATE]]
+
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
                 intv_tracker[patient[INTERVENTION]] += 1
             else: # must have died this month
                 mort_tracker[patient[SUBPOPULATION]] += 1
 
-
-        self.outputs.log_daily_state(self.day, state_tracker, oldtransmissions, mort_tracker, new_infections, intv_tracker, daily_tests)
+        self.outputs.log_daily_state(self.day, state_tracker, newtransmissions, mort_tracker, new_infections, intv_tracker, daily_tests)
         self.transmissions = np.sum(newtransmissions)
         self.day += 1
 

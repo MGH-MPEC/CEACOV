@@ -98,4 +98,4 @@ TESTS = range(TESTS_NUM)
 
 # Outcomes
 
-DAILY_OUTCOME_STRS = ["day#"] +  list(DISEASE_STATE_STRS) + ["new infections", "dead", "exposures"] + list(INTERVENTION_STRS) + ["tests"]
+DAILY_OUTCOME_STRS = ["day#"] +  list(DISEASE_STATE_STRS) + ["infections", "dead", "exposures"] + list(INTERVENTION_STRS) + ["tests"]
