@@ -50,7 +50,7 @@ def roll_for_transition(patient, state_tracker, inputs):
     if np.random.random() < prob_trans: # state changed
         new_state = PROGRESSION_PATHS[severity][dstate]
         state_tracker[new_state] += 1
-        patient[DISEASE_STATE] = PROGRESSION_PATHS[severity][dstate]
+        patient[DISEASE_STATE] = new_state
         patient[FLAGS] = patient[FLAGS] & ~(PRESENTED_THIS_DSTATE)
 
 def roll_for_mortality(patient, inputs):
