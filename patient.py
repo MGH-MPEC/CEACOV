@@ -79,7 +79,10 @@ def roll_for_testing(patient, inputs):
         num = inputs.test_number[patient[INTERVENTION]][patient[OBSERVED_STATE]]
         patient[FLAGS] = patient[FLAGS] | HAS_PENDING_TEST
         # bitwise nonesense to set pending result flags
-        patient[FLAGS] | (np.random.random() < inputs.test_characteristics[num][patient[DISEASE_STATE]]) << PENDING_TEST_RESULT
+        if np.random.random() < inputs.test_characteristics[num][patient[DISEASE_STATE]]:
+            patient[FLAGS] = patient[FLAGS] | PENDING_TEST_RESULT
+        else:
+            patient[FLAGS] = patient[FLAGS] & ~(PENDING_TEST_RESULT)
         patient[TIME_TO_TEST_RETURN] = inputs.test_return_delay[num]
         return True
     else:
