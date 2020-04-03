@@ -184,7 +184,7 @@ class Inputs():
             strat_dict = treatm_strat_inputs[INTERVENTION_STRS[i]]
             self.prob_present[i,:] = dict_to_array(strat_dict["probability of presenting to care"])
             self.switch_on_test_result[i,:,0] = dict_to_array(strat_dict["switch to treatment on negative test result"])
-            self.switch_on_test_result[i,:,0] = dict_to_array(strat_dict["switch to treatment on positive test result"])
+            self.switch_on_test_result[i,:,1] = dict_to_array(strat_dict["switch to treatment on positive test result"])
             self.test_number[i,:] = dict_to_array(strat_dict["test number"])
             self.testing_frequency[i,:] = dict_to_array(strat_dict["testing frequency"])
             self.prob_receive_test[i,:] = dict_to_array(strat_dict["probability receive test"])
