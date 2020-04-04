@@ -161,7 +161,7 @@ class Inputs():
             for severity in DISEASE_PROGRESSIONS:
                 for dstate in DISEASE_STATES:
                     if PROGRESSION_PATHS[severity][dstate]:
-                        self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - MILD]
+                        self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - INCUBATION]
         self.mortality_probs = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
         
         # transmission inputs
