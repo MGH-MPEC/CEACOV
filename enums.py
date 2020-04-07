@@ -15,7 +15,7 @@ class InvalidParamError(Exception):
 
 # Meta Params
 
-MODEL_VERSION = "v0.3"
+MODEL_VERSION = "v0.4"
 
 # State var indices
 NUM_STATE_VARS = 8
@@ -24,9 +24,9 @@ STATE_VARS = FLAGS, SUBPOPULATION, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_
 
 # Flags (bitwise flags in powers of 2)
 
-FLAGS_NUM = 4
+FLAGS_NUM = 6
 
-IS_ALIVE, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT = map(lambda x: 2 ** x, range(FLAGS_NUM))
+IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI = map(lambda x: 2 ** x, range(FLAGS_NUM))
 
 # Demographic State
 
@@ -50,52 +50,50 @@ SUBPOPULATION_STRS = AGE_CATEGORY_STRS
 
 DISEASE_STATES_NUM = 8
 
-DISEASE_STATES = SUSCEPTABLE, INCUBATION, MILD, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED = range(DISEASE_STATES_NUM)
+DISEASE_STATES = SUSCEPTABLE, INCUBATION, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED = range(DISEASE_STATES_NUM)
 
-DISEASE_STATE_STRS = ("susceptable", "incubation", "mild", "moderate", "severe", "critical", "recuperation", "recovered")
+DISEASE_STATE_STRS = ("susceptible", "pre-infectious incubation", "asymptomatic", "mild/moderate", "severe", "critical", "recuperation", "recovered")
 
 DISEASE_PROGRESSIONS_NUM = 4
 
-DISEASE_PROGRESSIONS = TO_MILD, TO_MODERATE, TO_SEVERE, TO_CRITICAL = range(DISEASE_PROGRESSIONS_NUM)
+DISEASE_PROGRESSIONS = TO_ASYMP, TO_MODERATE, TO_SEVERE, TO_CRITICAL = range(DISEASE_PROGRESSIONS_NUM)
 
-DISEASE_PROGRESSION_STRS = ("mild", "moderate", "severe", "critical")
+DISEASE_PROGRESSION_STRS = ("asymptomatic", "mild/moderate", "severe", "critical")
 
-PROGRESSION_PATHS = np.array([[0, MILD, RECOVERED, 0, 0, 0, 0, 0],
-         					  [0, MILD, MODERATE, RECOVERED, 0, 0, 0, 0],
-          					  [0, MILD, MODERATE, SEVERE, RECOVERED, 0, 0, 0],
-          					  [0, MILD, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED, 0]], dtype=int)
+PROGRESSION_PATHS = np.array([[0, ASYMP, RECOVERED, 0, 0, 0, 0, 0],
+         					  [0, ASYMP, MODERATE, RECOVERED, 0, 0, 0, 0],
+          					  [0, ASYMP, MODERATE, SEVERE, RECOVERED, 0, 0, 0],
+          					  [0, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED, 0]], dtype=int)
 
 # Resources
 
-RESOURCES_NUM = 3
+RESOURCES_NUM = 8
 
-RESOURCES = HOSPITAL_BEDS, ICU_BEDS, VENTILATORS = range(RESOURCES_NUM)
-
-RESOURCE_STRS = ("hospital beds", "ICU beds", "Ventilators")
+RESOURCE_STRS = [f"resource {i}" for i in range(0,RESOURCES_NUM)]
 
 # Interventions
 
-INTERVENTIONS_NUM = 6
+INTERVENTIONS_NUM = 8
 
 INTERVENTIONS = range(INTERVENTIONS_NUM)
 
 INTERVENTION_STRS = tuple(["no intervention"] + [f"intervention {i}" for i in range(1,INTERVENTIONS_NUM)])
 
 
-OBSERVED_STATES_NUM = 6
+OBSERVED_STATES_NUM = 5
 
-OBSERVED_STATES = SYMP_NONE, SYMP_MILD, SYMP_MODERATE, SYMP_SEVERE, SYMP_CRITICAL, SYMP_RECUPERATION = range(OBSERVED_STATES_NUM)
+OBSERVED_STATES = SYMP_ASYMP, SYMP_MODERATE, SYMP_SEVERE, SYMP_CRITICAL, SYMP_RECUPERATION = range(OBSERVED_STATES_NUM)
 
-OBSERVED_STATE_STRS = ("none", "mild", "moderate", "severe", "critical", "recuperation")
+OBSERVED_STATE_STRS = ("no symptoms", "mild/moderate", "severe", "critical", "recuperation")
 
 # Testing
 
-TEST_FLAGS_NUM = 6
-
-TESTS_NUM = 4
+TESTS_NUM = 8
 
 TESTS = range(TESTS_NUM)
 
 # Outcomes
 
-DAILY_OUTCOME_STRS = ["day#"] +  list(DISEASE_STATE_STRS) + [f"cumulative {state}" for state in DISEASE_PROGRESSION_STRS] + ["new infections", "cumulative infections", "dead", "exposures"] + list(INTERVENTION_STRS) + ["tests"]
+DAILY_OUTCOME_STRS = ["day#"] + list(DISEASE_STATE_STRS) + [f"cumulative {state}" for state in DISEASE_PROGRESSION_STRS] + \
+					 ["new infections", "cumulative infections", "dead", "exposures"] + list(INTERVENTION_STRS) + ["tests"] + \
+					 [f"resource untilization {rsc}" for rsc in range(RESOURCES_NUM)]

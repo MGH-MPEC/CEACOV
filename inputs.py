@@ -18,8 +18,9 @@ def dict_to_array(d):
 
 def generate_simulation_inputs():
     sim_in = {
-        "cohort_size": 1000,
-        "time_horizon": 180
+        "cohort size": 1000,
+        "time horizon": 180,
+        "fixed seed": True
     }
     return sim_in
 
@@ -46,7 +47,8 @@ def generate_progression_inputs():
 
 
 def generate_mortality_inputs():
-    mort_in = {f"daily mortality prob for {subpop} while critical": 0
+    mort_in = {f"daily mortality prob for {subpop}": {f"while {dstate}": 0
+            for dstate in DISEASE_STATE_STRS[SEVERE:CRITICAL+1]}
         for subpop in SUBPOPULATION_STRS}
     return mort_in
 
@@ -54,7 +56,7 @@ def generate_mortality_inputs():
 def generate_transmission_inputs():
     transm_in = {
     "transmission rate": {f"for {intv}": {f"while {dstate}": 0
-            for dstate in DISEASE_STATE_STRS[MILD:RECOVERED]}
+            for dstate in DISEASE_STATE_STRS[ASYMP:RECOVERED]}
         for intv in INTERVENTION_STRS},
     "rate multipliers": {"for " + intv: 1
         for intv in INTERVENTION_STRS}
@@ -78,9 +80,9 @@ def generate_testing_strat_inputs():
     INTERVENTION_STRS[n]: {
         "probability of presenting to care": {f"while {dstate}": 0
             for dstate in DISEASE_STATE_STRS},
-        "switch to treatment on positive test result": {f"if observed {symstate}": n
+        "switch to intervention on positive test result": {f"if observed {symstate}": n
             for symstate in OBSERVED_STATE_STRS},
-        "switch to treatment on negative test result": {f"if observed {symstate}": n
+        "switch to intervention on negative test result": {f"if observed {symstate}": n
             for symstate in OBSERVED_STATE_STRS},
         "test number": {f"if observed {symstate}": 0
             for symstate in OBSERVED_STATE_STRS},
@@ -91,6 +93,42 @@ def generate_testing_strat_inputs():
         }
         for n in INTERVENTIONS}
     return test_strat_in
+
+def generate_cost_inputs():
+    cost_in = {
+        "testing costs": {f"test {test}": 0.0
+            for test in TESTS},
+        "daily intervention costs": {intervention: {f"if observed {symstate}": 0.0
+                    for symstate in OBSERVED_STATE_STRS}
+            for intervention in INTERVENTION_STRS},                                                    
+        "mortality costs": {intervention: 0.0
+            for intervention in INTERVENTION_STRS}
+        }
+    return cost_in
+
+def generate_resource_inputs():
+    rsc_in = {
+    "resource availabilities": {resource: 0
+        for resource in RESOURCE_STRS},
+    "resource requirements":{f"for {intervention}":{f"if observed {symstate}": []
+            for symstate in OBSERVED_STATE_STRS}
+        for intervention in INTERVENTION_STRS},
+    "back-up interventions": {f"for {intervention}":{f"if observed {symstate}": 0
+            for symstate in OBSERVED_STATE_STRS}
+        for intervention in INTERVENTION_STRS}
+    }
+    return rsc_in
+
+def generate_non_covid_inputs():
+    no_co_in = {
+    "daily prob present non-covid":{f"with {symstate} symptoms":{f"for {subpop}": 0.0
+            for subpop in SUBPOPULATION_STRS}
+        for symstate in OBSERVED_STATE_STRS[SYMP_MODERATE:SYMP_CRITICAL+1]},
+    "non covid symptom duration":{f"for {symstate} symptoms":{f"for {subpop}": 0
+            for subpop in SUBPOPULATION_STRS}
+        for symstate in OBSERVED_STATE_STRS[SYMP_MODERATE:SYMP_CRITICAL+1]},
+    }
+    return no_co_in
 
 
 # generate imput format
@@ -110,8 +148,14 @@ def generate_input_dict():
     inputs["transmissions"] = generate_transmission_inputs()
     # Tests
     inputs["tests"] = generate_test_inputs()
-    # Inputs
-    inputs["testing strategies"] = generate_testing_strat_inputs()
+    # Intervention Strategies
+    inputs["intervention strategies"] = generate_testing_strat_inputs()
+    # Costs
+    inputs["costs"] = generate_cost_inputs()
+    # Resources
+    inputs["resources"] = generate_resource_inputs()
+    # Non-COVID RI
+    inputs["non-covid illness"] = generate_non_covid_inputs()
 
     return inputs
 
@@ -120,6 +164,7 @@ class Inputs():
         # simulation parameters
         self.cohort_size = 1000
         self.time_horizon = 180
+        self.fixed_seed = True
         # initialization inputs
         self.subpop_dist = np.zeros((SUBPOPULATIONS_NUM), dtype=float)
         self.dstate_dist = np.zeros((DISEASE_STATES_NUM), dtype=float)
@@ -132,12 +177,23 @@ class Inputs():
         # test inputs
         self.test_return_delay = np.zeros(TESTS_NUM, dtype=int)
         self.test_characteristics = np.zeros((TESTS_NUM, DISEASE_STATES_NUM), dtype=float)
-        # testing strategy inputs
+        # intervention
         self.prob_present = np.zeros((INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         self.switch_on_test_result = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM, 2), dtype=int)
         self.test_number = np.zeros((INTERVENTIONS_NUM,OBSERVED_STATES_NUM), dtype=int)
         self.testing_frequency = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=int)
         self.prob_receive_test = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
+        # cost inputs
+        self.testing_costs = np.zeros(TESTS_NUM, dtype=float)
+        self.intervention_daily_costs = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
+        self.mortality_costs = np.zeros((DISEASE_STATES_NUM, INTERVENTIONS_NUM), dtype=float)
+        # resource inputs
+        self.resource_base_availability = np.zeros(RESOURCES_NUM, dtype=int)
+        self.resource_requirements = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=np.uint8)
+        self.fallback_interventions = np.zeros((INTERVENTIONS, OBSERVED_STATES_NUM), dtype=int)
+        # non-covid RI
+        self.prob_present_non_covid = np.zeros((OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
+        self.non_covid_ri_durations = np.zeros((OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
 
     def read_inputs(self, param_dict):
         if param_dict["model version"] != MODEL_VERSION:
@@ -145,8 +201,9 @@ class Inputs():
     
         # simulation parameters
         sim_params = param_dict["simulation parameters"]
-        self.cohort_size = sim_params["cohort_size"]
-        self.time_horizon = sim_params["time_horizon"]
+        self.cohort_size = sim_params["cohort size"]
+        self.time_horizon = sim_params["time horizon"]
+        self.fixed_seed = sim_params["fixed seed"]
 
         # initialization inputs
         init_params = param_dict["initial state"]
@@ -162,12 +219,13 @@ class Inputs():
                 for dstate in DISEASE_STATES:
                     if PROGRESSION_PATHS[severity][dstate]:
                         self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - INCUBATION]
-        self.mortality_probs = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
+        self.mortality_probs[:,SEVERE:CRITICAL+1] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
         
         # transmission inputs
         transm_params = param_dict["transmissions"]
         trans_mults = np.asarray(dict_to_array(transm_params["rate multipliers"]), dtype=float)
-        self.trans_prob[:,MILD:RECOVERED] = dict_to_array(transm_params["transmission rate"])
+        self.trans_prob[:,ASYMP:RECOVERED] = dict_to_array(transm_params["transmission rate (intra-cohort)"])
+      
         # apply transmission mults
         for i in range(INTERVENTIONS_NUM):
             self.trans_prob[i] *= trans_mults[i]
@@ -178,16 +236,37 @@ class Inputs():
             self.test_return_delay[test] = test_inputs[test][0]
             self.test_characteristics[test,:] = test_inputs[test][1]
 
-        # treatment strategies
-        treatm_strat_inputs =  param_dict["testing strategies"]
+        # intervention strategies
+        intv_strat_inputs =  param_dict["intervention strategies"]
         for i in INTERVENTIONS:
-            strat_dict = treatm_strat_inputs[INTERVENTION_STRS[i]]
+            strat_dict = intv_strat_inputs[INTERVENTION_STRS[i]]
             self.prob_present[i,:] = dict_to_array(strat_dict["probability of presenting to care"])
-            self.switch_on_test_result[i,:,0] = dict_to_array(strat_dict["switch to treatment on negative test result"])
-            self.switch_on_test_result[i,:,1] = dict_to_array(strat_dict["switch to treatment on positive test result"])
+            self.switch_on_test_result[i,:,0] = dict_to_array(strat_dict["switch to intervention on negative test result"])
+            self.switch_on_test_result[i,:,1] = dict_to_array(strat_dict["switch to intervention on positive test result"])
             self.test_number[i,:] = dict_to_array(strat_dict["test number"])
             self.testing_frequency[i,:] = dict_to_array(strat_dict["testing frequency"])
             self.prob_receive_test[i,:] = dict_to_array(strat_dict["probability receive test"])
+
+        # costs
+        cost_inputs = param_dict["costs"]
+        self.testing_costs = dict_to_array(cost_inputs["testing costs"])
+        self.intervention_daily_costs = dict_to_array(cost_inputs["daily intervention costs"])
+        self.mortality_costs = dict_to_array(cost_inputs["mortality costs"])
+
+        # resources
+        rsc_inputs = param_dict["resources"]
+        self.resource_base_availability = dict_to_array(rsc_inputs["resource availabilities"])
+        requirements = dict_to_array(rsc_inputs["resource requirements"])
+        for intvention in INTERVENTIONS:
+            for symstate in OBSERVED_STATES:
+                rscs = requirements[intervention][symstate]
+                self.resource_requirements[intervention][symstate] = np.packbits([1 if i in rscs else 0 for i in range(8)])
+        self.fallback_interventions = dict_to_array(rsc_inputs["back-up interventions"])
+
+        # non-covid RI
+        non_covid_inputs = param_dict["non-covid illness"]
+        self.prob_present_non_covid[SYMP_MODERATE:SYMP_CRITICAL+1, :] = dict_to_array(non_covid_inputs["daily prob present non-covid"])
+        self.non_covid_ri_durations[SYMP_MODERATE:SYMP_CRITICAL+1, :] = dict_to_array(non_covid_inputs["non covid symptom duration"])
 
 #creates blank input file template
 def create_input_file(file):
