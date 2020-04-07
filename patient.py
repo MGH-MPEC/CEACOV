@@ -190,7 +190,7 @@ class SimState():
 
             # update treatment/testing state
             if patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, inputs):
-                if patient[OBSERVED_STATE_TIME] % inputs.testing_frequency[patient[INTERVENTION],patient[OBSERVED_STATE]] == 0:
+                if (not patient[FLAGS] & HAS_PENDING_TEST) and  (patient[OBSERVED_STATE_TIME] % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0):
                     if roll_for_testing(patient, inputs):
                         daily_tests += 1
                         test = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]
