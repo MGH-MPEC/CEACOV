@@ -107,7 +107,7 @@ class SimState():
         self.outputs = Outputs(inputs)
         self.cumulative_state_tracker = np.zeros(DISEASE_STATES_NUM, dtype=int)
         self.test_costs = np.zeros(TESTS_NUM, dtype=float)
-        self.intervention_costs = np.zeros(INTERVENTIONS_NUM, dtype=float)
+        self.intervention_costs = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
         self.mortality_costs = 0
         self.resource_utilization = np.zeros(RESOURCES_NUM, dtype=int)
 
@@ -203,12 +203,12 @@ class SimState():
                     old_intv = patient[INTERVENTION]
                     new_intv = inputs.switch_on_test_result[old_intv,patient[OBSERVED_STATE],int(result)]
                     if new_intv != old_intv:
-                        self.resource_utilization -= numpy.unpackbits(inputs.resource_requirements[old_intv, patient[OBSERVED_STATE]])
+                        self.resource_utilization -= np.unpackbits(inputs.resource_requirements[old_intv, patient[OBSERVED_STATE]])
                         new_req = inputs.resource_requirements[new_intv, patient[OBSERVED_STATE]]
-                        while np.packbits([(0 >= inputs.resource_base_availibility - self.resource_utilization)]) &  new_req: # does not meet requirment
+                        while np.packbits([(0 >= inputs.resource_base_availability - self.resource_utilization)]) &  new_req: # does not meet requirment
                             new_intv = inputs.fallback_interventions[old_intv, patient[OBSERVED_STATE]]
                             new_req = inputs.resource_requirements[new_intv, patient[OBSERVED_STATE]]
-                        self.resource_utilization += numpy.unpackbits(new_req)
+                        self.resource_utilization += np.unpackbits(new_req)
                         patient[INTERVENTION] = new_intv
                 else:
                     patient[TIME_TO_TEST_RETURN] -= 1
@@ -229,7 +229,7 @@ class SimState():
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
                 # calculate tomorrow's exposures
-                newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[intv,patient[DISEASE_STATE]]
+                newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[patient[INTERVENTION],patient[DISEASE_STATE]]
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
                 intv_tracker[patient[INTERVENTION]] += 1
                 self.intervention_costs[patient[INTERVENTION]] += inputs.intervention_daily_costs[patient[INTERVENTION],patient[OBSERVED_STATE]]
@@ -243,7 +243,7 @@ class SimState():
         self.day += 1
 
     def run(self):
-        if inputs.fixed_seed:
+        if self.inputs.fixed_seed:
             np.random.seed(0)
         else:
             np.random.seed()

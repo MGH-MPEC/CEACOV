@@ -190,7 +190,7 @@ class Inputs():
         # resource inputs
         self.resource_base_availability = np.zeros(RESOURCES_NUM, dtype=int)
         self.resource_requirements = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=np.uint8)
-        self.fallback_interventions = np.zeros((INTERVENTIONS, OBSERVED_STATES_NUM), dtype=int)
+        self.fallback_interventions = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=int)
         # non-covid RI
         self.prob_present_non_covid = np.zeros((OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
         self.non_covid_ri_durations = np.zeros((OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
@@ -224,7 +224,7 @@ class Inputs():
         # transmission inputs
         transm_params = param_dict["transmissions"]
         trans_mults = np.asarray(dict_to_array(transm_params["rate multipliers"]), dtype=float)
-        self.trans_prob[:,ASYMP:RECOVERED] = dict_to_array(transm_params["transmission rate (intra-cohort)"])
+        self.trans_prob[:,ASYMP:RECOVERED] = dict_to_array(transm_params["transmission rate"])
       
         # apply transmission mults
         for i in range(INTERVENTIONS_NUM):
@@ -249,24 +249,24 @@ class Inputs():
 
         # costs
         cost_inputs = param_dict["costs"]
-        self.testing_costs = dict_to_array(cost_inputs["testing costs"])
-        self.intervention_daily_costs = dict_to_array(cost_inputs["daily intervention costs"])
-        self.mortality_costs = dict_to_array(cost_inputs["mortality costs"])
+        self.testing_costs = np.asarray(dict_to_array(cost_inputs["testing costs"]))
+        self.intervention_daily_costs = np.asarray(dict_to_array(cost_inputs["daily intervention costs"]))
+        self.mortality_costs = np.asarray(dict_to_array(cost_inputs["mortality costs"]))
 
         # resources
         rsc_inputs = param_dict["resources"]
-        self.resource_base_availability = dict_to_array(rsc_inputs["resource availabilities"])
+        self.resource_base_availability = np.asarray(dict_to_array(rsc_inputs["resource availabilities"]))
         requirements = dict_to_array(rsc_inputs["resource requirements"])
-        for intvention in INTERVENTIONS:
+        for intervention in INTERVENTIONS:
             for symstate in OBSERVED_STATES:
                 rscs = requirements[intervention][symstate]
                 self.resource_requirements[intervention][symstate] = np.packbits([1 if i in rscs else 0 for i in range(8)])
-        self.fallback_interventions = dict_to_array(rsc_inputs["back-up interventions"])
+        self.fallback_interventions = np.asarray(dict_to_array(rsc_inputs["back-up interventions"]))
 
         # non-covid RI
         non_covid_inputs = param_dict["non-covid illness"]
-        self.prob_present_non_covid[SYMP_MODERATE:SYMP_CRITICAL+1, :] = dict_to_array(non_covid_inputs["daily prob present non-covid"])
-        self.non_covid_ri_durations[SYMP_MODERATE:SYMP_CRITICAL+1, :] = dict_to_array(non_covid_inputs["non covid symptom duration"])
+        self.prob_present_non_covid[SYMP_MODERATE:SYMP_CRITICAL+1, :] = np.asarray(dict_to_array(non_covid_inputs["daily prob present non-covid"]))
+        self.non_covid_ri_durations[SYMP_MODERATE:SYMP_CRITICAL+1, :] = np.asarray(dict_to_array(non_covid_inputs["non covid symptom duration"]))
 
 #creates blank input file template
 def create_input_file(file):

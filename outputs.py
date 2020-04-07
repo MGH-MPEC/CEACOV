@@ -17,7 +17,7 @@ class Outputs:
         self.daily_interventions = np.zeros((inputs.time_horizon, INTERVENTIONS_NUM), dtype=int)
         self.daily_tests = np.zeros(inputs.time_horizon, dtype=int)
         self.daily_new_infections = np.zeros(inputs.time_horizon, dtype=int)
-        self.daily_resource_utilization = np.zeros(inputs.time_horizon, RESOURCES_NUM, dtype=int)
+        self.daily_resource_utilization = np.zeros((inputs.time_horizon, RESOURCES_NUM), dtype=int)
         self.inputs = inputs
     # record statistics at end of day, called in step
     def log_daily_state(self, day, states, cumulative, transmissions, infections, mortality, interventions, tests, resources):
@@ -47,5 +47,5 @@ class Outputs:
         data[:,index["exposures"]] = np.sum(self.daily_transmission, axis=1)
         data[:,index["no intervention"]:index["no intervention"] + INTERVENTIONS_NUM] = self.daily_interventions
         data[:,index["tests"]] = self.daily_tests
-        data[:,-RESOURCES_NUM] = self.daily_resource_utilization
+        data[:,-RESOURCES_NUM:] = self.daily_resource_utilization
         np.savetxt(file, data, fmt="%.6f", delimiter="\t", header=header)
