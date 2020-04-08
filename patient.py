@@ -255,7 +255,7 @@ class SimState():
                 newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[patient[INTERVENTION],patient[DISEASE_STATE]]
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
                 intv_tracker[patient[INTERVENTION]] += 1
-                self.intervention_costs[patient[INTERVENTION]] += inputs.intervention_daily_costs[patient[INTERVENTION],patient[OBSERVED_STATE]]
+                self.intervention_costs[patient[INTERVENTION],patient[OBSERVED_STATE]] += inputs.intervention_daily_costs[patient[INTERVENTION],patient[OBSERVED_STATE]]
                 self.non_covids += int(patient[FLAGS] & NON_COVID_RI)
 
             else: # must have died this month
