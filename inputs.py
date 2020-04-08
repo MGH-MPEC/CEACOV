@@ -149,7 +149,7 @@ def generate_input_dict():
     # Tests
     inputs["tests"] = generate_test_inputs()
     # Intervention Strategies
-    inputs["intervention strategies"] = generate_testing_strat_inputs()
+    inputs["testing strategies"] = generate_testing_strat_inputs()
     # Costs
     inputs["costs"] = generate_cost_inputs()
     # Resources
@@ -237,7 +237,7 @@ class Inputs():
             self.test_characteristics[test,:] = test_inputs[test][1]
 
         # intervention strategies
-        intv_strat_inputs =  param_dict["intervention strategies"]
+        intv_strat_inputs =  param_dict["testing strategies"]
         for i in INTERVENTIONS:
             strat_dict = intv_strat_inputs[INTERVENTION_STRS[i]]
             self.prob_present[i,:] = dict_to_array(strat_dict["probability of presenting to care"])
