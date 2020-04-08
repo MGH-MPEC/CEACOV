@@ -62,6 +62,7 @@ def roll_for_transition(patient, state_tracker, inputs):
     else:
         return False
 
+
 def roll_for_mortality(patient, inputs):
     prob_mort = inputs.mortality_probs[patient[SUBPOPULATION], patient[DISEASE_STATE]]
     if np.random.random() < prob_mort:
@@ -69,6 +70,7 @@ def roll_for_mortality(patient, inputs):
         return True
     else:
         return False
+
 
 def roll_for_presentation(patient, inputs):
     if np.random.random() < inputs.prob_present[patient[INTERVENTION],patient[DISEASE_STATE]]:
@@ -83,8 +85,9 @@ def roll_for_presentation(patient, inputs):
     else:
         return False
 
+
 def roll_for_testing(patient, inputs):
-    if np.random.random() < inputs.prob_receive_test[patient[INTERVENTION],patient[OBSERVED_STATE]]:
+    if np.random.random() < inputs.prob_receive_test[patient[INTERVENTION],patient[OBSERVED_STATE],patient[SUBPOPULATION]]:
         num = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]
         patient[FLAGS] = patient[FLAGS] | HAS_PENDING_TEST
         # bitwise nonesense to set pending result flags
@@ -96,6 +99,7 @@ def roll_for_testing(patient, inputs):
         return True
     else:
         return False
+
 
 # Main simulation class
 class SimState():

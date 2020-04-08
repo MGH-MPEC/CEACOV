@@ -26,7 +26,6 @@ def generate_simulation_inputs():
 
 
 def generate_initialization_inputs():
-
     init_in = {
         "subpopulation dist":  dict(zip(SUBPOPULATION_STRS, [1] + ([0] * (SUBPOPULATIONS_NUM - 1)))),
         "initial disease dist": dict(zip(DISEASE_STATE_STRS, [1] + ([0] * (DISEASE_STATES_NUM - 1)))),
@@ -88,7 +87,8 @@ def generate_testing_strat_inputs():
             for symstate in OBSERVED_STATE_STRS},
         "testing frequency": {f"if observed {symstate}": 1
             for symstate in OBSERVED_STATE_STRS},
-        "probability receive test": {f"if observed {symstate}": 0
+        "probability receive test": {f"if observed {symstate}": {f"for {subpop}": 0
+                for subpop in SUBPOPULATION_STRS}
             for symstate in OBSERVED_STATE_STRS}
         }
         for n in INTERVENTIONS}
@@ -182,7 +182,7 @@ class Inputs():
         self.switch_on_test_result = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM, 2), dtype=int)
         self.test_number = np.zeros((INTERVENTIONS_NUM,OBSERVED_STATES_NUM), dtype=int)
         self.testing_frequency = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=int)
-        self.prob_receive_test = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
+        self.prob_receive_test = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
         # cost inputs
         self.testing_costs = np.zeros(TESTS_NUM, dtype=float)
         self.intervention_daily_costs = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
@@ -245,7 +245,7 @@ class Inputs():
             self.switch_on_test_result[i,:,1] = dict_to_array(strat_dict["switch to intervention on positive test result"])
             self.test_number[i,:] = dict_to_array(strat_dict["test number"])
             self.testing_frequency[i,:] = dict_to_array(strat_dict["testing frequency"])
-            self.prob_receive_test[i,:] = dict_to_array(strat_dict["probability receive test"])
+            self.prob_receive_test[i,:,:] = dict_to_array(strat_dict["probability receive test"])
 
         # costs
         cost_inputs = param_dict["costs"]
