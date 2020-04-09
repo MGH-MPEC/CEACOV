@@ -180,6 +180,8 @@ class SimState():
 
             # transmissions for day 0
             self.transmissions += self.inputs.trans_prob[patient[INTERVENTION],patient[dstate]]
+            # resources in use at init
+            self.resource_utilization += np.unpackbits(self.inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
 
     def step(self):
         """performs daily patient updates"""
