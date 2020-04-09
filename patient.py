@@ -157,7 +157,7 @@ class SimState():
             if dstate == SUSCEPTABLE:
                 self.cumulative_state_tracker[SUSCEPTABLE] += 1
             
-            if dstate == RECOVERED:
+            elif dstate == RECOVERED:
                 self.cumulative_state_tracker[0:progression+3] += 1
                 self.cumulative_state_tracker[RECOVERED] += 1
 
