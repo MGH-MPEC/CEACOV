@@ -179,7 +179,7 @@ class SimState():
                 raise UserWarning("Patient disease state is in unreachable state")
 
             # transmissions for day 0
-            self.transmissions += self.inputs.trans_prob[patient[INTERVENTION],patient[dstate]]
+            self.transmissions += self.inputs.trans_prob[patient[INTERVENTION],dstate]
             # resources in use at init
             self.resource_utilization += np.unpackbits(self.inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
 
