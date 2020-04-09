@@ -115,7 +115,7 @@ def switch_intervention(patient, inputs, intervention, resource_utilization):
         new_intv = temp
         new_req = inputs.resource_requirements[new_intv, obs]
         count += 1
-        if count > INTERVENTIONS_NUM:
+        if count > 2*INTERVENTIONS_NUM:
             raise UserWarning("No intervention available for the given resource constraints")
     resource_utilization += np.unpackbits(new_req)
     patient[INTERVENTION] = new_intv
