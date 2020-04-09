@@ -249,7 +249,7 @@ class SimState():
             else:
                 roll_for_transition(patient, self.cumulative_state_tracker, inputs)
             # roll for mortality
-            if patient[DISEASE_STATE] in (SEVERE, CRITICAL):
+            if (patient[DISEASE_STATE] == CRITICAL) or (patient[DISEASE_PROGRESSION] == TO_SEVERE and patient[DISEASE_STATE] == SEVERE):
                 roll_for_mortality(patient, inputs)
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
