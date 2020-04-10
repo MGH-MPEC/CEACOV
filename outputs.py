@@ -50,6 +50,7 @@ class Outputs:
         data[:,index["cumulative infections"]] = np.full(self.inputs.time_horizon, self.inputs.cohort_size, dtype=int) - np.sum(self.daily_states[:,:,SUSCEPTABLE], axis=1)
         data[:,index["dead"]] = np.cumsum(np.sum(self.daily_mortality, axis=1))
         data[:,index["exposures"]] = np.sum(self.daily_transmission, axis=1)
+        data[:,index["non-covid presenting"]] = self.non_covid_presenting        
         data[:,index["no intervention"]:index["no intervention"] + INTERVENTIONS_NUM] = self.daily_interventions
         data[:,index["tests"]] = self.daily_tests
         data[:,index["test costs"]:index["test costs"]+3] = self.costs

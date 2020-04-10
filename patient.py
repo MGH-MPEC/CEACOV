@@ -72,15 +72,19 @@ def roll_for_mortality(patient, inputs):
         return False
 
 
-def roll_for_presentation(patient, inputs):
+def roll_for_presentation(patient, resource_use, inputs):
     if np.random.random() < inputs.prob_present[patient[INTERVENTION],patient[DISEASE_STATE]]:
         patient[FLAGS] = patient[FLAGS] | PRESENTED_THIS_DSTATE
         patient[FLAGS] = patient[FLAGS] & (~NON_COVID_RI)
         patient[OBSERVED_STATE_TIME] = 0
         if patient[DISEASE_STATE] in DISEASE_STATES[MODERATE:RECUPERATION+1]:
-            patient[OBSERVED_STATE] = patient[DISEASE_STATE]-MODERATE+1
+            new_obs_state = patient[DISEASE_STATE]-MODERATE+1
+            switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use)
+            patient[OBSERVED_STATE] = new_obs_state
         else:
-            patient[OBSERVED_STATE] = SYMP_ASYMP
+            new_obs_state = SYMP_ASYMP
+            switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use)
+            patient[OBSERVED_STATE] = new_obs_state
         return True
     else:
         return False
@@ -100,20 +104,20 @@ def roll_for_testing(patient, inputs):
     else:
         return False
 
-def switch_intervention(patient, inputs, intervention, resource_utilization):
+def switch_intervention(patient, inputs, new_intervention, new_obs_state, resource_utilization):
     obs = patient[OBSERVED_STATE]
     old_intv = patient[INTERVENTION]
     # return resources to the pool
     resource_utilization -= np.unpackbits(inputs.resource_requirements[old_intv, obs])
     # loop through until requirements are met
-    new_intv = intervention
-    new_req = inputs.resource_requirements[new_intv, obs]
+    new_intv = new_intervention
+    new_req = inputs.resource_requirements[new_intv, new_obs_state]
     count = 0
-    while np.packbits([(0 >= inputs.resource_base_availability - resource_utilization)]) & new_req: # does not meet requirment
+    while np.packbits(0 >= inputs.resource_base_availability - resource_utilization) & new_req: # does not meet requirment
         temp = inputs.fallback_interventions[old_intv, obs]
         old_intv = new_intv
         new_intv = temp
-        new_req = inputs.resource_requirements[new_intv, obs]
+        new_req = inputs.resource_requirements[new_intv, new_obs_state]
         count += 1
         if count > 2*INTERVENTIONS_NUM:
             raise UserWarning("No intervention available for the given resource constraints")
@@ -208,23 +212,23 @@ class SimState():
                     if np.random.random() < np.sum(non_covid_present_dist):
                         patient[FLAGS] = patient[FLAGS] | (NON_COVID_RI + PRESENTED_THIS_DSTATE)
                         patient[OBSERVED_STATE_TIME] = 0
-                        non_covid_present_dist[0] = non_covid_present_dist / np.sum(non_covid_present_dist)
-                        patient[OBSERVED_STATE] = draw_from_dist(non_covid_present_dist)
-                        switch_intervention(patient, inputs, patient[INTERVENTION], self.resource_utilization)
-            else:
-                if OBSERVED_STATE_TIME >= inputs.non_covid_ri_durations[patient[OBSERVED_STATE], patient[SUBPOPULATION]]: # Time is up
+                        non_covid_present_dist = non_covid_present_dist / np.sum(non_covid_present_dist)
+                        symptoms = draw_from_dist(non_covid_present_dist)
+                        switch_intervention(patient, inputs, patient[INTERVENTION], symptoms, self.resource_utilization)
+                        patient[OBSERVED_STATE] = symptoms
+            elif patient[OBSERVED_STATE_TIME] >= inputs.non_covid_ri_durations[patient[OBSERVED_STATE], patient[SUBPOPULATION]]: # time is up
+                    switch_intervention(patient, inputs, patient[INTERVENTION], SYMP_ASYMP, self.resource_utilization)
                     patient[OBSERVED_STATE] = SYMP_ASYMP
                     patient[FLAGS] = patient[FLAGS] & ~(NON_COVID_RI + PRESENTED_THIS_DSTATE)
-                    switch_intervention(patient, inputs, patient[INTERVENTION], self.resource_utilization)
-
 
             # update treatment/testing state
-            if patient[FLAGS] & PRESENTED_THIS_DSTATE or (roll_for_presentation(patient, inputs) and switch_intervention(patient, inputs, patient[INTERVENTION], self.resource_utilization)):
+            if patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, inputs):
                 if (not patient[FLAGS] & HAS_PENDING_TEST) and  (patient[OBSERVED_STATE_TIME] % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0):
                     if roll_for_testing(patient, inputs):
                         daily_tests += 1
                         test = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]
                         self.test_costs[test] += inputs.testing_costs[test]
+            
             if patient[FLAGS] & HAS_PENDING_TEST:
                 if patient[TIME_TO_TEST_RETURN] == 0:
                     # perform test teturn updates
@@ -233,10 +237,11 @@ class SimState():
                     old_intv = patient[INTERVENTION]
                     new_intv = inputs.switch_on_test_result[old_intv,patient[OBSERVED_STATE],int(result)]
                     if new_intv != old_intv:
-                        switch_intervention(patient, inputs, new_intv, self.resource_utilization)
+                        switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization)
 
                 else:
                     patient[TIME_TO_TEST_RETURN] -= 1
+            
             patient[OBSERVED_STATE_TIME] += 1
 
             # update disease state
@@ -258,7 +263,8 @@ class SimState():
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
                 intv_tracker[patient[INTERVENTION]] += 1
                 self.intervention_costs[patient[INTERVENTION],patient[OBSERVED_STATE]] += inputs.intervention_daily_costs[patient[INTERVENTION],patient[OBSERVED_STATE]]
-                self.non_covids += int(patient[FLAGS] & NON_COVID_RI)
+                if patient[FLAGS] & NON_COVID_RI:
+                    self.non_covids += 1
 
             else: # must have died this month
                 mort_tracker[patient[SUBPOPULATION]] += 1
