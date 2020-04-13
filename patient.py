@@ -238,6 +238,7 @@ class SimState():
                     new_intv = inputs.switch_on_test_result[old_intv,patient[OBSERVED_STATE],int(result)]
                     if new_intv != old_intv:
                         switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization)
+                        patient[OBSERVED_STATE_TIME] = 0
 
                 else:
                     patient[TIME_TO_TEST_RETURN] -= 1
