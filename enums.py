@@ -99,5 +99,5 @@ COST_STRS = ("test costs", "intervention costs", "mortality costs")
 # Outcomes
 
 DAILY_OUTCOME_STRS = ["day#"] + list(DISEASE_STATE_STRS) + [f"cumulative {state}" for state in DISEASE_PROGRESSION_STRS] + \
-					 ["new infections", "cumulative infections", "dead", "exposures", "non-covid presenting"] + list(INTERVENTION_STRS) + ["tests"] + \
-					 list(COST_STRS) + [f"resource untilization {rsc}" for rsc in range(RESOURCES_NUM)]
+					 ["new infections", "cumulative infections", "dead", "exposures", "non-covid presenting"] + list(INTERVENTION_STRS) + \
+					 [f"test {n}" for n in TESTS] + list(COST_STRS) + [f"resource untilization {rsc}" for rsc in range(RESOURCES_NUM)]

@@ -15,7 +15,7 @@ class Outputs:
         self.cumulative_states = np.zeros((inputs.time_horizon, DISEASE_STATES_NUM), dtype = int)
         self.daily_mortality = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM), dtype=int)
         self.daily_interventions = np.zeros((inputs.time_horizon, INTERVENTIONS_NUM), dtype=int)
-        self.daily_tests = np.zeros(inputs.time_horizon, dtype=int)
+        self.daily_tests = np.zeros((inputs.time_horizon, TESTS_NUM), dtype=int)
         self.daily_new_infections = np.zeros(inputs.time_horizon, dtype=int)
         self.non_covid_presenting = np.zeros(inputs.time_horizon, dtype=int)
         self.daily_resource_utilization = np.zeros((inputs.time_horizon, RESOURCES_NUM), dtype=int)
@@ -27,7 +27,7 @@ class Outputs:
         self.daily_transmission[day, :] = transmissions
         self.daily_new_infections[day] = infections
         self.daily_mortality[day, :] = mortality
-        self.daily_tests[day] = tests
+        self.daily_tests[day,:] = tests
         self.daily_interventions[day,:] = interventions
         self.cumulative_states[day,:] = cumulative
         self.daily_resource_utilization[day,:] = resources
@@ -52,7 +52,7 @@ class Outputs:
         data[:,index["exposures"]] = np.sum(self.daily_transmission, axis=1)
         data[:,index["non-covid presenting"]] = self.non_covid_presenting        
         data[:,index["no intervention"]:index["no intervention"] + INTERVENTIONS_NUM] = self.daily_interventions
-        data[:,index["tests"]] = self.daily_tests
+        data[:,index["test 0"]:index["test 0"] + TESTS_NUM] = self.daily_tests
         data[:,index["test costs"]:index["test costs"]+3] = self.costs
         data[:,-RESOURCES_NUM:] = self.daily_resource_utilization
         np.savetxt(file, data, fmt="%.6f", delimiter="\t", header=header)

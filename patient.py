@@ -90,9 +90,10 @@ def roll_for_presentation(patient, resource_use, inputs):
         return False
 
 
-def roll_for_testing(patient, inputs):
+def roll_for_testing(patient, test_counter, inputs):
     if np.random.random() < inputs.prob_receive_test[patient[INTERVENTION],patient[OBSERVED_STATE],patient[SUBPOPULATION]]:
         num = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]
+        test_counter[num] += 1
         patient[FLAGS] = patient[FLAGS] | HAS_PENDING_TEST
         # bitwise nonesense to set pending result flags
         if np.random.random() < inputs.test_characteristics[num,patient[DISEASE_STATE]]:
@@ -197,7 +198,7 @@ class SimState():
         intv_tracker = np.zeros(INTERVENTIONS_NUM, dtype=int)
         non_covid_present_dist = np.zeros(OBSERVED_STATES_NUM, dtype=float)
         self.non_covids = 0
-        daily_tests = 0
+        daily_tests = np.zeros(TESTS_NUM, dtype=int)
         new_infections = 0
         inputs = self.inputs
         # loop over cohort
@@ -224,8 +225,7 @@ class SimState():
             # update treatment/testing state
             if patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, inputs):
                 if (not patient[FLAGS] & HAS_PENDING_TEST) and  (patient[OBSERVED_STATE_TIME] % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0):
-                    if roll_for_testing(patient, inputs):
-                        daily_tests += 1
+                    if roll_for_testing(patient, daily_tests, inputs):
                         test = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]
                         self.test_costs[test] += inputs.testing_costs[test]
             
