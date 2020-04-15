@@ -184,7 +184,7 @@ class SimState():
                 raise UserWarning("Patient disease state is in unreachable state")
 
             # transmissions for day 0
-            self.transmissions += self.inputs.trans_prob[patient[INTERVENTION],dstate]
+            self.transmissions += self.inputs.trans_prob[0,patient[INTERVENTION],dstate]
             # resources in use at init
             self.resource_utilization += np.unpackbits(self.inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
 
@@ -201,6 +201,12 @@ class SimState():
         daily_tests = np.zeros(TESTS_NUM, dtype=int)
         new_infections = 0
         inputs = self.inputs
+        # time period for transm rate:
+        trans_period = T_RATE_PERIODS_NUM - 1
+        for i in range(T_RATE_PERIODS_NUM - 1):
+            if self.day <= inputs.trans_rate_thresholds[i]:
+                trans_period = i
+                break
         # loop over cohort
         for patient in self.cohort:
             if not (patient[FLAGS] & IS_ALIVE):     # if patient is dead, nothing to do
@@ -260,7 +266,7 @@ class SimState():
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
                 # calculate tomorrow's exposures
-                newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[patient[INTERVENTION],patient[DISEASE_STATE]]
+                newtransmissions[patient[SUBPOPULATION]] += inputs.trans_prob[trans_period, patient[INTERVENTION],patient[DISEASE_STATE]]
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
                 intv_tracker[patient[INTERVENTION]] += 1
                 self.intervention_costs[patient[INTERVENTION],patient[OBSERVED_STATE]] += inputs.intervention_daily_costs[patient[INTERVENTION],patient[OBSERVED_STATE]]

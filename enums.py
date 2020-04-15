@@ -15,7 +15,7 @@ class InvalidParamError(Exception):
 
 # Meta Params
 
-MODEL_VERSION = "v0.4"
+MODEL_VERSION = "v0.5"
 
 # State var indices
 NUM_STATE_VARS = 8
@@ -85,6 +85,9 @@ OBSERVED_STATES_NUM = 5
 OBSERVED_STATES = SYMP_ASYMP, SYMP_MODERATE, SYMP_SEVERE, SYMP_CRITICAL, SYMP_RECUPERATION = range(OBSERVED_STATES_NUM)
 
 OBSERVED_STATE_STRS = ("no symptoms", "mild/moderate", "severe", "critical", "recuperation")
+
+
+T_RATE_PERIODS_NUM = 5
 
 # Testing
 

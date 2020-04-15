@@ -57,8 +57,13 @@ def generate_transmission_inputs():
     "transmission rate": {f"for {intv}": {f"while {dstate}": 0
             for dstate in DISEASE_STATE_STRS[ASYMP:RECOVERED]}
         for intv in INTERVENTION_STRS},
-    "rate multipliers": {"for " + intv: 1
+    "rate multiplier thresholds": {f"t{threshold}": (10 + 10*threshold)
+        for threshold in range(T_RATE_PERIODS_NUM - 1)},
+    "rate multipliers": {threshold: {"for " + intv: 1
         for intv in INTERVENTION_STRS}
+    for threshold in ["for 0 <= day# < t0"] +
+                      [f"for t{i} <= day# < t{i+1}" for i in range(T_RATE_PERIODS_NUM-2)] +
+                      [f"day# > t{T_RATE_PERIODS_NUM-1}"]}
     }
     return transm_in
 
@@ -173,7 +178,8 @@ class Inputs():
         self.progression_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         #transmission inputs
-        self.trans_prob = np.zeros((INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
+        self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
+        self.trans_prob = np.zeros((T_RATE_PERIODS_NUM, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         # test inputs
         self.test_return_delay = np.zeros(TESTS_NUM, dtype=int)
         self.test_characteristics = np.zeros((TESTS_NUM, DISEASE_STATES_NUM), dtype=float)
@@ -224,11 +230,14 @@ class Inputs():
         # transmission inputs
         transm_params = param_dict["transmissions"]
         trans_mults = np.asarray(dict_to_array(transm_params["rate multipliers"]), dtype=float)
-        self.trans_prob[:,ASYMP:RECOVERED] = dict_to_array(transm_params["transmission rate"])
+        self.trans_prob[:,:,ASYMP:RECOVERED] = dict_to_array(transm_params["transmission rate"])
       
         # apply transmission mults
-        for i in range(INTERVENTIONS_NUM):
-            self.trans_prob[i] *= trans_mults[i]
+        for i in range(T_RATE_PERIODS_NUM):
+            for j in range(INTERVENTIONS_NUM):
+                self.trans_prob[i,j,:] *= trans_mults[i][j]
+
+        self.trans_rate_thresholds = np.asarray(dict_to_array(transm_params["rate multiplier thresholds"]))
 
         # test inputs
         test_inputs = dict_to_array(param_dict["tests"])
