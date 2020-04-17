@@ -46,8 +46,9 @@ def generate_progression_inputs():
 
 
 def generate_mortality_inputs():
-    mort_in = {f"daily mortality prob for {subpop}": {f"while {dstate}": 0
-            for dstate in DISEASE_STATE_STRS[SEVERE:CRITICAL+1]}
+    mort_in = {f"daily mortality prob for {subpop}": {f"on {intv}": {f"while {dstate}": 0
+                for dstate in DISEASE_STATE_STRS[SEVERE:CRITICAL+1]}
+            for intv in INTERVENTION_STRS}
         for subpop in SUBPOPULATION_STRS}
     return mort_in
 
@@ -176,7 +177,7 @@ class Inputs():
         self.severity_dist = np.zeros((SUBPOPULATIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         # transition inputs
         self.progression_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
-        self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, DISEASE_STATES_NUM), dtype=float)
+        self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         #transmission inputs
         self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
         self.trans_prob = np.zeros((T_RATE_PERIODS_NUM, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
@@ -225,7 +226,7 @@ class Inputs():
                 for dstate in DISEASE_STATES:
                     if PROGRESSION_PATHS[severity][dstate]:
                         self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - INCUBATION]
-        self.mortality_probs[:,SEVERE:CRITICAL+1] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
+        self.mortality_probs[:,:,SEVERE:CRITICAL+1] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
         
         # transmission inputs
         transm_params = param_dict["transmissions"]

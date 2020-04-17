@@ -64,7 +64,7 @@ def roll_for_transition(patient, state_tracker, inputs):
 
 
 def roll_for_mortality(patient, inputs):
-    prob_mort = inputs.mortality_probs[patient[SUBPOPULATION], patient[DISEASE_STATE]]
+    prob_mort = inputs.mortality_probs[patient[SUBPOPULATION], patient[INTERVENTION], patient[DISEASE_STATE]]
     if np.random.random() < prob_mort:
         patient[FLAGS] = patient[FLAGS] & (~IS_ALIVE)
         return True
