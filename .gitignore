@@ -6,6 +6,7 @@
 prototyping.ipynb
 # resource folder
 /Resources/**
+/Scripts/**
 # sim inputs and outputs
 **/results/**
 **.json
