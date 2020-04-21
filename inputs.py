@@ -20,7 +20,8 @@ def generate_simulation_inputs():
     sim_in = {
         "cohort size": 1000,
         "time horizon": 180,
-        "fixed seed": True
+        "fixed seed": True,
+        "detailed state outputs": False
     }
     return sim_in
 
@@ -41,6 +42,8 @@ def generate_progression_inputs():
                 {f"from {DISEASE_STATE_STRS[dstate]} to {DISEASE_STATE_STRS[PROGRESSION_PATHS[severity][dstate]]}": 0
                 for dstate in DISEASE_STATES[INCUBATION:RECOVERED] if PROGRESSION_PATHS[severity][dstate]}
             for severity in DISEASE_PROGRESSIONS}
+        for intv in INTERVENTIONS}
+    prog_in["daily prob recovery from severe state in critical path"] = {f"for {INTERVENTION_STRS[intv]}": 0
         for intv in INTERVENTIONS}
     return prog_in
 
@@ -171,12 +174,14 @@ class Inputs():
         self.cohort_size = 1000
         self.time_horizon = 180
         self.fixed_seed = True
+        self.state_detail = False
         # initialization inputs
         self.subpop_dist = np.zeros((SUBPOPULATIONS_NUM), dtype=float)
         self.dstate_dist = np.zeros((DISEASE_STATES_NUM), dtype=float)
         self.severity_dist = np.zeros((SUBPOPULATIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         # transition inputs
         self.progression_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
+        self.severe_kludge_probs = np.zeros((INTERVENTIONS_NUM), dtype=float)
         self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         #transmission inputs
         self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
@@ -211,6 +216,7 @@ class Inputs():
         self.cohort_size = sim_params["cohort size"]
         self.time_horizon = sim_params["time horizon"]
         self.fixed_seed = sim_params["fixed seed"]
+        self.state_detail = sim_params["detailed state outputs"]
 
         # initialization inputs
         init_params = param_dict["initial state"]
@@ -226,6 +232,7 @@ class Inputs():
                 for dstate in DISEASE_STATES:
                     if PROGRESSION_PATHS[severity][dstate]:
                         self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - INCUBATION]
+        self.severe_kludge_probs[:] = np.asarray(dict_to_array(dict_to_array(param_dict["disease progression"]["daily prob recovery from severe state in critical path"])), dtype=float)
         self.mortality_probs[:,:,SEVERE:CRITICAL+1] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
         
         # transmission inputs

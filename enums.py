@@ -15,7 +15,7 @@ class InvalidParamError(Exception):
 
 # Meta Params
 
-MODEL_VERSION = "v0.5"
+MODEL_VERSION = "v0.6"
 
 # State var indices
 NUM_STATE_VARS = 8

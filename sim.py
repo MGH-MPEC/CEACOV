@@ -41,8 +41,11 @@ if __name__ == "__main__" or __name__ == "builtins":
         # run the sim!
         for input_file in input_files:            
             sim_state = SimState(read_inputs(input_file))
-            out_file = os.path.splitext(os.path.split(input_file)[1])[0] + ".tsv"
-            print("running " + input_file)
+            out_file = os.path.join(results_directory, os.path.splitext(os.path.split(input_file)[1])[0] + ".tsv")
+            state_file = None
+            if sim_state.inputs.state_detail:
+                state_file = os.path.join(results_directory, os.path.splitext(os.path.split(input_file)[1])[0] + "_state_data.tsv")
+            print("running " + input_file) 
             sim_state.run()
-            sim_state.outputs.write_outputs(os.path.join(results_directory, out_file))
+            sim_state.outputs.write_outputs(out_file, state_file)
 
