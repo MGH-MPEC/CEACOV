@@ -57,7 +57,7 @@ class Outputs:
         data[:,-RESOURCES_NUM:] = self.daily_resource_utilization
         np.savetxt(file, data, fmt="%.6f", delimiter="\t", header=header)
         if state_detail:
-            state_header = "\t".join(["day #"] + [f"{intv} while {dstate}" for dstate in DISEASE_STATE_STRS for intv in INTERVENTION_STRS])
+            state_header = "\t".join(["day #"] + [f"{intv} while {dstate}" for intv in INTERVENTION_STRS for dstate in DISEASE_STATE_STRS])
             state_data = np.zeros((self.inputs.time_horizon, (INTERVENTIONS_NUM*DISEASE_STATES_NUM)+1), dtype=int)
             state_data[:,0] = np.arange(np.size(data[:,0]))
             state_data[:,1:] = np.reshape(self.daily_interventions,(self.inputs.time_horizon, (INTERVENTIONS_NUM*DISEASE_STATES_NUM)))
