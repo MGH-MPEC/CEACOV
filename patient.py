@@ -80,10 +80,11 @@ def roll_for_transition(patient, state_tracker, inputs):
             return False
 
 
-def roll_for_mortality(patient, inputs):
+def roll_for_mortality(patient, inputs, resource_utilization):
     prob_mort = inputs.mortality_probs[patient[SUBPOPULATION], patient[INTERVENTION], patient[DISEASE_STATE]]
     if np.random.random() < prob_mort:
         patient[FLAGS] = patient[FLAGS] & (~IS_ALIVE)
+        resource_utilization -= np.unpackbits(inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
         return True
     else:
         return False
@@ -279,7 +280,7 @@ class SimState():
                 roll_for_transition(patient, self.cumulative_state_tracker, inputs)
             # roll for mortality
             if (patient[DISEASE_STATE] == CRITICAL) or (patient[DISEASE_PROGRESSION] == TO_SEVERE and patient[DISEASE_STATE] == SEVERE):
-                roll_for_mortality(patient, inputs)
+                roll_for_mortality(patient, inputs, self.resource_utilization)
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
                 # calculate tomorrow's exposures
