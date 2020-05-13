@@ -212,7 +212,7 @@ class SimState():
         # local variables for quick access
         newtransmissions = np.zeros(SUBPOPULATIONS_NUM, dtype=float)
         state_tracker = np.zeros((SUBPOPULATIONS_NUM, DISEASE_STATES_NUM), dtype=float)
-        mort_tracker = np.zeros(SUBPOPULATIONS_NUM, dtype=int)
+        mort_tracker = np.zeros((SUBPOPULATIONS_NUM, 2), dtype=int)
         intv_tracker = np.zeros((INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
         non_covid_present_dist = np.zeros(OBSERVED_STATES_NUM, dtype=float)
         self.non_covids = 0
@@ -258,6 +258,8 @@ class SimState():
                     # perform test teturn updates
                     patient[FLAGS] = patient[FLAGS] & (~HAS_PENDING_TEST)
                     result = bool(patient[FLAGS] & PENDING_TEST_RESULT)
+                    if result:
+                        patient[FLAGS] = patient[FLAGS] | EVER_TESTED_POSITIVE
                     old_intv = patient[INTERVENTION]
                     new_intv = inputs.switch_on_test_result[old_intv,patient[OBSERVED_STATE],int(result)]
                     if new_intv != old_intv:
@@ -292,7 +294,7 @@ class SimState():
                     self.non_covids += 1
 
             else: # must have died this month
-                mort_tracker[patient[SUBPOPULATION]] += 1
+                mort_tracker[patient[SUBPOPULATION], 1 if (patient[FLAGS] & EVER_TESTED_POSITIVE) else 0] += 1
                 self.mortality_costs += inputs.mortality_costs[patient[INTERVENTION]]
 
         costs = np.asarray([np.sum(self.test_costs), np.sum(self.intervention_costs), self.mortality_costs], dtype=float)

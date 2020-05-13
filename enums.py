@@ -24,9 +24,9 @@ STATE_VARS = FLAGS, SUBPOPULATION, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_
 
 # Flags (bitwise flags in powers of 2)
 
-FLAGS_NUM = 6
+FLAGS_NUM = 7
 
-IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI = map(lambda x: 2 ** x, range(FLAGS_NUM))
+IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI, EVER_TESTED_POSITIVE = map(lambda x: 2 ** x, range(FLAGS_NUM))
 
 # Demographic State
 
@@ -102,5 +102,6 @@ COST_STRS = ("test costs", "intervention costs", "mortality costs")
 # Outcomes
 
 DAILY_OUTCOME_STRS = ["day#"] + list(DISEASE_STATE_STRS) + [f"cumulative {state}" for state in DISEASE_PROGRESSION_STRS] + \
-					 ["new infections", "cumulative infections", "dead", "exposures", "non-covid presenting"] + list(INTERVENTION_STRS) + \
+					 ["new infections", "cumulative infections", "dead"] + [f"mortality for {subpop} tested {status}" for subpop in SUBPOPULATION_STRS for status in ("-","+")] + \
+					 ["exposures", "non-covid presenting"] + list(INTERVENTION_STRS) + \
 					 [f"test {n}" for n in TESTS] + list(COST_STRS) + [f"resource untilization {rsc}" for rsc in range(RESOURCES_NUM)]
