@@ -111,13 +111,14 @@ def roll_for_presentation(patient, resource_use, inputs):
 def roll_for_testing(patient, test_counter, inputs):
     if np.random.random() < inputs.prob_receive_test[patient[INTERVENTION],patient[OBSERVED_STATE],patient[SUBPOPULATION]]:
         num = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]
-        test_counter[num] += 1
         patient[FLAGS] = patient[FLAGS] | HAS_PENDING_TEST
         # bitwise nonesense to set pending result flags
         if np.random.random() < inputs.test_characteristics[num,patient[DISEASE_STATE]]:
             patient[FLAGS] = patient[FLAGS] | PENDING_TEST_RESULT
+            test_counter[num,1] += 1
         else:
             patient[FLAGS] = patient[FLAGS] & ~(PENDING_TEST_RESULT)
+            test_counter[num,0] += 1
         patient[TIME_TO_TEST_RETURN] = inputs.test_return_delay[num]
         return True
     else:
@@ -216,7 +217,7 @@ class SimState():
         intv_tracker = np.zeros((INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
         non_covid_present_dist = np.zeros(OBSERVED_STATES_NUM, dtype=float)
         self.non_covids = 0
-        daily_tests = np.zeros(TESTS_NUM, dtype=int)
+        daily_tests = np.zeros((TESTS_NUM, 2), dtype=int)
         new_infections = 0
         inputs = self.inputs
         # time period for transm rate:

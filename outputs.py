@@ -15,7 +15,7 @@ class Outputs:
         self.cumulative_states = np.zeros((inputs.time_horizon, DISEASE_STATES_NUM), dtype = int)
         self.daily_mortality = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM, 2), dtype=int)
         self.daily_interventions = np.zeros((inputs.time_horizon, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
-        self.daily_tests = np.zeros((inputs.time_horizon, TESTS_NUM), dtype=int)
+        self.daily_tests = np.zeros((inputs.time_horizon, TESTS_NUM, 2), dtype=int)
         self.daily_new_infections = np.zeros(inputs.time_horizon, dtype=int)
         self.non_covid_presenting = np.zeros(inputs.time_horizon, dtype=int)
         self.daily_resource_utilization = np.zeros((inputs.time_horizon, RESOURCES_NUM), dtype=int)
@@ -49,11 +49,11 @@ class Outputs:
         data[:,index["new infections"]] = self.daily_new_infections
         data[:,index["cumulative infections"]] = np.full(self.inputs.time_horizon, self.inputs.cohort_size, dtype=int) - np.sum(self.daily_states[:,:,SUSCEPTABLE], axis=1)
         data[:,index["dead"]] = np.cumsum(np.sum(self.daily_mortality, axis=(1,2)))
-        data[:,index["dead"] + 1 : index["dead"] + 1 + (2 * SUBPOPULATIONS_NUM)] = np.reshape(self.daily_mortality, (-1, 2*SUBPOPULATIONS_NUM))
+        data[:,index["dead"] + 1 : index["dead"] + 1 + (2*SUBPOPULATIONS_NUM)] = np.reshape(self.daily_mortality, (-1, 2*SUBPOPULATIONS_NUM))
         data[:,index["exposures"]] = np.sum(self.daily_transmission, axis=1)
         data[:,index["non-covid presenting"]] = self.non_covid_presenting        
         data[:,index["no intervention"]:index["no intervention"] + INTERVENTIONS_NUM] = np.sum(self.daily_interventions,axis=2)
-        data[:,index["test 0"]:index["test 0"] + TESTS_NUM] = self.daily_tests
+        data[:,index["test 0 (-)"]:index["test 0 (-)"] + (2*TESTS_NUM)] = np.reshape(self.daily_tests, (-1, 2*TESTS_NUM))
         data[:,index["test costs"]:index["test costs"]+3] = self.costs
         data[:,-RESOURCES_NUM:] = self.daily_resource_utilization
         np.savetxt(file, data, fmt="%.6f", delimiter="\t", header=header)
