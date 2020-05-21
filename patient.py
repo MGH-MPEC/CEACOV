@@ -248,12 +248,11 @@ class SimState():
                     patient[FLAGS] = patient[FLAGS] & ~(NON_COVID_RI + PRESENTED_THIS_DSTATE)
 
             # update treatment/testing state
-            if patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, inputs):
-                if (not patient[FLAGS] & HAS_PENDING_TEST) and  (patient[OBSERVED_STATE_TIME] % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0):
+            if (patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, inputs)) and (not patient[FLAGS] & HAS_PENDING_TEST):
+                test = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]                
+                if ((patient[OBSERVED_STATE_TIME] - inputs.test_lag[test]) % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0):
                     if roll_for_testing(patient, daily_tests, inputs):
-                        test = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]
                         self.test_costs[test] += inputs.testing_costs[test]
-            
             if patient[FLAGS] & HAS_PENDING_TEST:
                 if patient[TIME_TO_TEST_RETURN] == 0:
                     # perform test teturn updates
@@ -266,7 +265,6 @@ class SimState():
                     if new_intv != old_intv:
                         switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization)
                         patient[OBSERVED_STATE_TIME] = -1
-
                 else:
                     patient[TIME_TO_TEST_RETURN] -= 1
             
