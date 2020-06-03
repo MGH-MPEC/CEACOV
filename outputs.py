@@ -13,7 +13,7 @@ class Outputs:
         self.daily_transmission = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM), dtype=float)
         self.daily_states = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM, DISEASE_STATES_NUM), dtype=int)
         self.cumulative_states = np.zeros((inputs.time_horizon, DISEASE_STATES_NUM), dtype = int)
-        self.daily_mortality = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM, 2), dtype=int)
+        self.daily_mortality = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=int)
         self.daily_interventions = np.zeros((inputs.time_horizon, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
         self.daily_tests = np.zeros((inputs.time_horizon, TESTS_NUM, 2), dtype=int)
         self.daily_new_infections = np.zeros(inputs.time_horizon, dtype=int)
@@ -49,13 +49,14 @@ class Outputs:
         data[:,index["new infections"]] = self.daily_new_infections
         data[:,index["cumulative infections"]] = np.full(self.inputs.time_horizon, self.inputs.cohort_size, dtype=int) - np.sum(self.daily_states[:,:,SUSCEPTABLE], axis=1)
         data[:,index["dead"]] = np.cumsum(np.sum(self.daily_mortality, axis=(1,2)))
-        data[:,index["dead"] + 1 : index["dead"] + 1 + (2*SUBPOPULATIONS_NUM)] = np.reshape(self.daily_mortality, (-1, 2*SUBPOPULATIONS_NUM))
+        data[:,index["dead"] + 1 : index["dead"] + 1 + SUBPOPULATIONS_NUM] = np.sum(self.daily_mortality, axis=2)
         data[:,index["exposures"]] = np.sum(self.daily_transmission, axis=1)
         data[:,index["non-covid presenting"]] = self.non_covid_presenting        
         data[:,index["no intervention"]:index["no intervention"] + INTERVENTIONS_NUM] = np.sum(self.daily_interventions,axis=2)
         data[:,index["test 0 (-)"]:index["test 0 (-)"] + (2*TESTS_NUM)] = np.reshape(self.daily_tests, (-1, 2*TESTS_NUM))
         data[:,index["test costs"]:index["test costs"]+3] = self.costs
-        data[:,-RESOURCES_NUM:] = self.daily_resource_utilization
+        data[:,index["test costs"]+3:index["test costs"]+3+RESOURCES_NUM] = self.daily_resource_utilization
+        data[:, -INTERVENTIONS_NUM:] = np.sum(self.daily_mortality, axis=1)
         np.savetxt(file, data, fmt="%.6f", delimiter="\t", header=header)
         if state_detail:
             state_header = "\t".join(["day #"] + [f"{intv} while {dstate}" for intv in INTERVENTION_STRS for dstate in DISEASE_STATE_STRS])
