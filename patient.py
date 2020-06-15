@@ -125,21 +125,17 @@ def roll_for_testing(patient, test_counter, inputs):
         return False
 
 def switch_intervention(patient, inputs, new_intervention, new_obs_state, resource_utilization):
-    obs = patient[OBSERVED_STATE]
-    old_intv = patient[INTERVENTION]
     # return resources to the pool
-    resource_utilization -= np.unpackbits(inputs.resource_requirements[old_intv, obs])
+    resource_utilization -= np.unpackbits(inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
     # loop through until requirements are met
     new_intv = new_intervention
     new_req = inputs.resource_requirements[new_intv, new_obs_state]
     count = 0
     while np.packbits(0 >= inputs.resource_base_availability - resource_utilization) & new_req: # does not meet requirment
-        temp = inputs.fallback_interventions[old_intv, obs]
-        old_intv = new_intv
-        new_intv = temp
+        new_intv = inputs.fallback_interventions[new_intv, new_obs_state]
         new_req = inputs.resource_requirements[new_intv, new_obs_state]
         count += 1
-        if count > 2*INTERVENTIONS_NUM:
+        if count >= INTERVENTIONS_NUM:
             raise UserWarning("No intervention available for the given resource constraints")
     resource_utilization += np.unpackbits(new_req)
     patient[INTERVENTION] = new_intv
@@ -236,16 +232,22 @@ class SimState():
                 if ~patient[FLAGS] & IS_INFECTED: # Don't have COVID
                     non_covid_present_dist[:] = inputs.prob_present_non_covid[:,patient[SUBPOPULATION]]
                     if np.random.random() < np.sum(non_covid_present_dist):
-                        patient[FLAGS] = patient[FLAGS] | (NON_COVID_RI + PRESENTED_THIS_DSTATE)
-                        patient[OBSERVED_STATE_TIME] = 0
                         non_covid_present_dist = non_covid_present_dist / np.sum(non_covid_present_dist)
                         symptoms = draw_from_dist(non_covid_present_dist)
                         switch_intervention(patient, inputs, patient[INTERVENTION], symptoms, self.resource_utilization)
+                        patient[NON_COVID_TIME] = inputs.non_covid_ri_durations[symptoms, patient[SUBPOPULATION]]
                         patient[OBSERVED_STATE] = symptoms
-            elif patient[OBSERVED_STATE_TIME] >= inputs.non_covid_ri_durations[patient[OBSERVED_STATE], patient[SUBPOPULATION]]: # time is up
+                        patient[OBSERVED_STATE_TIME] = 0
+                        patient[FLAGS] = patient[FLAGS] | (NON_COVID_RI + PRESENTED_THIS_DSTATE)
+                        self.non_covids += 1
+            else:# has non-covid RI
+                patient[NON_COVID_TIME] -= 1 # countdown non-covid symptom duration
+                if (patient[NON_COVID_TIME] == 0) or (patient[FLAGS] & IS_INFECTED): #non-covid duration is up or *newly* infected COVID
                     switch_intervention(patient, inputs, patient[INTERVENTION], SYMP_ASYMP, self.resource_utilization)
                     patient[OBSERVED_STATE] = SYMP_ASYMP
+                    patient[OBSERVED_STATE_TIME] = 0
                     patient[FLAGS] = patient[FLAGS] & ~(NON_COVID_RI + PRESENTED_THIS_DSTATE)
+                    self.non_covids -= 1
 
             # update treatment/testing state
             if (patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, inputs)) and (not patient[FLAGS] & HAS_PENDING_TEST):
@@ -289,8 +291,6 @@ class SimState():
                 state_tracker[patient[SUBPOPULATION],patient[DISEASE_STATE]] += 1
                 intv_tracker[patient[INTERVENTION],patient[DISEASE_STATE]] += 1
                 self.intervention_costs[patient[INTERVENTION],patient[OBSERVED_STATE]] += inputs.intervention_daily_costs[patient[INTERVENTION],patient[OBSERVED_STATE]]
-                if patient[FLAGS] & NON_COVID_RI:
-                    self.non_covids += 1
 
             else: # must have died this month
                 mort_tracker[patient[SUBPOPULATION], patient[INTERVENTION]] += 1
