@@ -15,6 +15,11 @@ def dict_to_array(d):
     else:
         return d
 
+def normalized(a, axis=-1, order=2):
+    l2 = np.atleast_1d(np.linalg.norm(a, order, axis))
+    l2[l2==0] = 1
+    return a / np.expand_dims(l2, axis)
+
 
 def generate_simulation_inputs():
     sim_in = {
@@ -28,9 +33,12 @@ def generate_simulation_inputs():
 
 def generate_initialization_inputs():
     init_in = {
-        "subpopulation dist":  dict(zip(SUBPOPULATION_STRS, [1] + ([0] * (SUBPOPULATIONS_NUM - 1)))),
-        "initial disease dist": dict(zip(DISEASE_STATE_STRS, [1] + ([0] * (DISEASE_STATES_NUM - 1)))),
-        "severity dist by subpopulation": {f"for {subpop}": dict(zip(DISEASE_PROGRESSION_STRS, [1] + ([0] * (DISEASE_PROGRESSIONS_NUM - 1))))
+        "transmission group dist": dict(zip(TRANSMISSION_GROUP_STRS, [1] + ([0] * (TRANSMISSION_GROUPS_NUM - 1)))),
+        "risk category dist":  {f"for {tgroup}": dict(zip(SUBPOPULATION_STRS, [1] + ([0] * (SUBPOPULATIONS_NUM - 1))))
+        for tgroup in TRANSMISSION_GROUP_STRS},
+        "initial disease dist": {f"for {tgroup}": dict(zip(DISEASE_STATE_STRS, [1] + ([0] * (DISEASE_STATES_NUM - 1))))
+        for tgroup in TRANSMISSION_GROUP_STRS},
+        "severity dist": {f"for {subpop}": dict(zip(DISEASE_PROGRESSION_STRS, [1] + ([0] * (DISEASE_PROGRESSIONS_NUM - 1))))
         for subpop in SUBPOPULATION_STRS}
     }
     return init_in
@@ -64,10 +72,14 @@ def generate_transmission_inputs():
     "rate multiplier thresholds": {f"t{threshold}": (10 + 10*threshold)
         for threshold in range(T_RATE_PERIODS_NUM - 1)},
     "rate multipliers": {threshold: {"for " + intv: 1
+            for intv in INTERVENTION_STRS}
+        for threshold in ["for 0 <= day# < t0"] +
+                          [f"for t{i} <= day# < t{i+1}" for i in range(T_RATE_PERIODS_NUM-2)] +
+                          [f"day# > t{T_RATE_PERIODS_NUM-1}"]},
+    "contact matrix":{f"for {intv}": {f"from {tgroup}": {f"to {igroup}": 1
+                for igroup in TRANSMISSION_GROUP_STRS}
+            for tgroup in TRANSMISSION_GROUP_STRS}
         for intv in INTERVENTION_STRS}
-    for threshold in ["for 0 <= day# < t0"] +
-                      [f"for t{i} <= day# < t{i+1}" for i in range(T_RATE_PERIODS_NUM-2)] +
-                      [f"day# > t{T_RATE_PERIODS_NUM-1}"]}
     }
     return transm_in
 
@@ -177,8 +189,9 @@ class Inputs():
         self.fixed_seed = True
         self.state_detail = False
         # initialization inputs
-        self.subpop_dist = np.zeros((SUBPOPULATIONS_NUM), dtype=float)
-        self.dstate_dist = np.zeros((DISEASE_STATES_NUM), dtype=float)
+        self.tgroup_dist = np.zeros((TRANSMISSION_GROUPS_NUM), dtype=float)
+        self.subpop_dist = np.zeros((TRANSMISSION_GROUPS_NUM, SUBPOPULATIONS_NUM), dtype=float)
+        self.dstate_dist = np.zeros((TRANSMISSION_GROUPS_NUM, DISEASE_STATES_NUM), dtype=float)
         self.severity_dist = np.zeros((SUBPOPULATIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         # transition inputs
         self.progression_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
@@ -187,6 +200,8 @@ class Inputs():
         #transmission inputs
         self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
         self.trans_prob = np.zeros((T_RATE_PERIODS_NUM, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
+        # transmissions from, transmissions to
+        self.contact_matrices = np.zeros((INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, TRANSMISSION_GROUPS_NUM), dtype=float)
         # test inputs
         self.test_return_delay = np.zeros(TESTS_NUM, dtype=int)
         self.test_characteristics = np.zeros((TESTS_NUM, DISEASE_STATES_NUM), dtype=float)
@@ -222,9 +237,10 @@ class Inputs():
 
         # initialization inputs
         init_params = param_dict["initial state"]
-        self.subpop_dist = np.asarray(dict_to_array(init_params["subpopulation dist"]), dtype=float)
+        self.tgroup_dist = np.asarray(dict_to_array(init_params["transmission group dist"]), dtype=float)
+        self.subpop_dist = np.asarray(dict_to_array(init_params["risk category dist"]), dtype=float)
         self.dstate_dist = np.asarray(dict_to_array(init_params["initial disease dist"]), dtype=float)
-        self.severity_dist = np.asarray(dict_to_array(init_params["severity dist by subpopulation"]), dtype=float)
+        self.severity_dist = np.asarray(dict_to_array(init_params["severity dist"]), dtype=float)
 
         # transition inputs
         # kinda gross - consider reworking
@@ -241,6 +257,7 @@ class Inputs():
         transm_params = param_dict["transmissions"]
         trans_mults = np.asarray(dict_to_array(transm_params["rate multipliers"]), dtype=float)
         self.trans_prob[:,:,ASYMP:RECOVERED] = dict_to_array(transm_params["transmission rate"])
+        self.contact_matrices = normalized(np.asarray(dict_to_array(transm_params["contact matrix"]), dtype=float), axis=2, order=1)
       
         # apply transmission mults
         for i in range(T_RATE_PERIODS_NUM):
@@ -254,11 +271,7 @@ class Inputs():
         for test in TESTS:
             self.test_return_delay[test] = test_inputs[test][0]
             self.test_characteristics[test,:] = test_inputs[test][1]
-            # Test lag input is optional for now!
-            try:
-                self.test_lag[test] = test_inputs[test][2]
-            except IndexError:
-                self.test_lag[test] = 0
+            self.test_lag[test] = test_inputs[test][2]
 
         # intervention strategies
         intv_strat_inputs =  param_dict["testing strategies"]

@@ -15,12 +15,12 @@ class InvalidParamError(Exception):
 
 # Meta Params
 
-MODEL_VERSION = "v0.6"
+MODEL_VERSION = "v0.7"
 
 # State var indices
-NUM_STATE_VARS = 9
+NUM_STATE_VARS = 10
 
-STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_TEST_RETURN = range(NUM_STATE_VARS)
+STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, TRANSM_GROUP, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_TEST_RETURN = range(NUM_STATE_VARS)
 
 # Flags (bitwise flags in powers of 2)
 
@@ -46,7 +46,10 @@ SUBPOPULATIONS = range(SUBPOPULATIONS_NUM)
 SUBPOPULATION_STRS = AGE_CATEGORY_STRS
 
 
-# TRANSMISSION_GROUP_STRS
+
+TRANSMISSION_GROUPS_NUM = 4
+
+TRANSMISSION_GROUP_STRS = [f"tn_group {n}" for n in range(TRANSMISSION_GROUPS_NUM)]
 
 
 # Covid Disease State
@@ -106,6 +109,6 @@ COST_STRS = ("test costs", "intervention costs", "mortality costs")
 
 DAILY_OUTCOME_STRS = ["day#"] + list(DISEASE_STATE_STRS) + [f"cumulative {state}" for state in DISEASE_PROGRESSION_STRS] + \
 					 ["new infections", "cumulative infections", "dead"] + [f"mortality for {subpop}" for subpop in SUBPOPULATION_STRS] + \
-					 ["exposures", "non-covid presenting"] + list(INTERVENTION_STRS) + \
-					 [f"test {n} ({status})" for n in TESTS for status in ("-","+")] + list(COST_STRS) + \
+					 [f"FoI {tgroup} -> {igroup}" for tgroup in TRANSMISSION_GROUP_STRS for igroup in TRANSMISSION_GROUP_STRS] + \
+					 ["non-covid presenting"] + list(INTERVENTION_STRS) +  [f"test {n} ({status})" for n in TESTS for status in ("-","+")] + list(COST_STRS) + \
 					 [f"resource untilization {rsc}" for rsc in range(RESOURCES_NUM)] + [f"mortality on {intv}" for intv in INTERVENTION_STRS]
