@@ -50,7 +50,7 @@ def generate_progression_inputs():
     prog_in = {f"daily disease progression probability for {INTERVENTION_STRS[intv]}":
             {f"for severity = {DISEASE_PROGRESSION_STRS[severity]}":
                 {f"from {DISEASE_STATE_STRS[dstate]} to {DISEASE_STATE_STRS[PROGRESSION_PATHS[severity][dstate]]}": 0
-                for dstate in DISEASE_STATES[INCUBATION:RECOVERED] if PROGRESSION_PATHS[severity][dstate]}
+                for dstate in DISEASE_STATES[INCUBATION:RECOVERED] if (PROGRESSION_PATHS[severity][dstate] >= 0)}
             for severity in DISEASE_PROGRESSIONS}
         for intv in INTERVENTIONS}
     prog_in["daily prob recovery from severe state in critical path"] = {f"for {INTERVENTION_STRS[intv]}": 0
@@ -258,7 +258,7 @@ class Inputs():
         for intv in INTERVENTIONS:
             for severity in DISEASE_PROGRESSIONS:
                 for dstate in DISEASE_STATES:
-                    if PROGRESSION_PATHS[severity][dstate]:
+                    if (PROGRESSION_PATHS[severity][dstate] >= 0):
                         self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - INCUBATION]
         self.severe_kludge_probs[:] = np.asarray(dict_to_array(param_dict["disease progression"]["daily prob recovery from severe state in critical path"]), dtype=float)
         self.initial_prob_immunity = np.asarray(dict_to_array(param_dict["disease progression"]["initial immunity on recovery probability"]), dtype=float)
