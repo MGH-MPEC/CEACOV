@@ -165,6 +165,7 @@ class SimState():
         subpop_dist = self.inputs.subpop_dist
         disease_dist = self.inputs.dstate_dist
         severity_dist = self.inputs.severity_dist
+        intv_dist = self.inputs.start_intvs
         # iterate over patient_array
         for patient in self.cohort:
             patient[FLAGS] = patient[FLAGS] | IS_ALIVE
@@ -172,9 +173,11 @@ class SimState():
             tgroup = draw_from_dist(tgroup_dist)
             patient[TRANSM_GROUP] = tgroup
             self.transmission_groups[tgroup] += 1
-            
+
             subpop = draw_from_dist(subpop_dist[tgroup])
             patient[SUBPOPULATION] = subpop
+
+            patient[INTERVENTION] = intv_dist[tgroup]
             # draw disease state
             dstate = draw_from_dist(disease_dist[tgroup])
             patient[DISEASE_STATE] = dstate

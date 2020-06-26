@@ -66,10 +66,10 @@ DISEASE_PROGRESSIONS = TO_ASYMP, TO_MODERATE, TO_SEVERE, TO_CRITICAL = range(DIS
 
 DISEASE_PROGRESSION_STRS = ("asymptomatic", "mild/moderate", "severe", "critical")
 
-PROGRESSION_PATHS = np.array([[0, ASYMP, RECOVERED, 0, 0, 0, 0, 0],
-         					  [0, ASYMP, MODERATE, RECOVERED, 0, 0, 0, 0],
-          					  [0, ASYMP, MODERATE, SEVERE, RECOVERED, 0, 0, 0],
-          					  [0, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED, 0]], dtype=int)
+PROGRESSION_PATHS = np.array([[-1, ASYMP, RECOVERED, -1, -1, -1, -1, SUSCEPTABLE],
+         					  [-1, ASYMP, MODERATE, RECOVERED, -1, -1, -1, SUSCEPTABLE],
+          					  [-1, ASYMP, MODERATE, SEVERE, RECOVERED, -1, -1, SUSCEPTABLE],
+          					  [-1, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED, SUSCEPTABLE]], dtype=int)
 
 # Resources
 

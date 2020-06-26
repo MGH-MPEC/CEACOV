@@ -35,11 +35,13 @@ def generate_initialization_inputs():
     init_in = {
         "transmission group dist": dict(zip(TRANSMISSION_GROUP_STRS, [1] + ([0] * (TRANSMISSION_GROUPS_NUM - 1)))),
         "risk category dist":  {f"for {tgroup}": dict(zip(SUBPOPULATION_STRS, [1] + ([0] * (SUBPOPULATIONS_NUM - 1))))
-        for tgroup in TRANSMISSION_GROUP_STRS},
+            for tgroup in TRANSMISSION_GROUP_STRS},
         "initial disease dist": {f"for {tgroup}": dict(zip(DISEASE_STATE_STRS, [1] + ([0] * (DISEASE_STATES_NUM - 1))))
-        for tgroup in TRANSMISSION_GROUP_STRS},
+            for tgroup in TRANSMISSION_GROUP_STRS},
         "severity dist": {f"for {subpop}": dict(zip(DISEASE_PROGRESSION_STRS, [1] + ([0] * (DISEASE_PROGRESSIONS_NUM - 1))))
-        for subpop in SUBPOPULATION_STRS}
+            for subpop in SUBPOPULATION_STRS},
+        "start intervention": {f"for {tgroup}": 0
+            for tgroup in TRANSMISSION_GROUP_STRS}
     }
     return init_in
 
@@ -52,6 +54,9 @@ def generate_progression_inputs():
             for severity in DISEASE_PROGRESSIONS}
         for intv in INTERVENTIONS}
     prog_in["daily prob recovery from severe state in critical path"] = {f"for {INTERVENTION_STRS[intv]}": 0
+        for intv in INTERVENTIONS}
+    prog_in["initial immunity on recovery probability"] = {f"for {INTERVENTION_STRS[intv]}": {f"for severity = {severity}": 1
+            for severity in DISEASE_PROGRESSIONS}
         for intv in INTERVENTIONS}
     return prog_in
 
@@ -193,9 +198,11 @@ class Inputs():
         self.subpop_dist = np.zeros((TRANSMISSION_GROUPS_NUM, SUBPOPULATIONS_NUM), dtype=float)
         self.dstate_dist = np.zeros((TRANSMISSION_GROUPS_NUM, DISEASE_STATES_NUM), dtype=float)
         self.severity_dist = np.zeros((SUBPOPULATIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
+        self.start_intvs = np.zeros((TRANSMISSION_GROUPS_NUM), dtype=int)
         # transition inputs
         self.progression_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         self.severe_kludge_probs = np.zeros((INTERVENTIONS_NUM), dtype=float)
+        self.initial_prob_immunity = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         #transmission inputs
         self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
@@ -241,6 +248,9 @@ class Inputs():
         self.subpop_dist = np.asarray(dict_to_array(init_params["risk category dist"]), dtype=float)
         self.dstate_dist = np.asarray(dict_to_array(init_params["initial disease dist"]), dtype=float)
         self.severity_dist = np.asarray(dict_to_array(init_params["severity dist"]), dtype=float)
+        self.start_intvs = np.asarray(dict_to_array(init_params["start intervention"]), dtype=int)
+        if np.any((self.start_intvs < 0) | (self.start_intvs >= INTERVENTIONS_NUM)):
+            raise UserWarning("start intervention inputs must be valid intervention numbers")
 
         # transition inputs
         # kinda gross - consider reworking
@@ -250,7 +260,8 @@ class Inputs():
                 for dstate in DISEASE_STATES:
                     if PROGRESSION_PATHS[severity][dstate]:
                         self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - INCUBATION]
-        self.severe_kludge_probs[:] = np.asarray(dict_to_array(dict_to_array(param_dict["disease progression"]["daily prob recovery from severe state in critical path"])), dtype=float)
+        self.severe_kludge_probs[:] = np.asarray(dict_to_array(param_dict["disease progression"]["daily prob recovery from severe state in critical path"]), dtype=float)
+        self.initial_prob_immunity = np.asarray(dict_to_array(param_dict["disease progression"]["initial immunity on recovery probability"]), dtype=float)
         self.mortality_probs[:,:,SEVERE:CRITICAL+1] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
         
         # transmission inputs
@@ -283,6 +294,8 @@ class Inputs():
             self.test_number[i,:] = dict_to_array(strat_dict["test number"])
             self.testing_frequency[i,:] = dict_to_array(strat_dict["testing frequency"])
             self.prob_receive_test[i,:,:] = dict_to_array(strat_dict["probability receive test"])
+        if np.any((self.switch_on_test_result < 0) | (self.switch_on_test_result >= INTERVENTIONS_NUM)):
+            raise UserWarning("switch on test return inputs must be valid intervention numbers")
 
         # costs
         cost_inputs = param_dict["costs"]
