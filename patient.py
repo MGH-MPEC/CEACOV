@@ -113,8 +113,14 @@ def roll_for_testing(patient, test_counter, inputs):
     if np.random.random() < inputs.prob_receive_test[patient[INTERVENTION],patient[OBSERVED_STATE],patient[SUBPOPULATION]]:
         num = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]
         patient[FLAGS] = patient[FLAGS] | HAS_PENDING_TEST
-        # bitwise nonesense to set pending result flags
-        if np.random.random() < inputs.test_characteristics[num,patient[DISEASE_STATE]]:
+        # get test characteristic time-from-infection interval
+        time_period = TEST_SENS_THRESHOLDS_NUM + 1
+        time_infected = patient[TIME_INFECTED]
+        for i in range(TEST_SENS_THRESHOLDS_NUM):
+            if time_infected < inputs.test_sens_thresholds[num,i]:
+                time_period = i
+                break
+        if np.random.random() < inputs.test_characteristics[num,time_period]:
             patient[FLAGS] = patient[FLAGS] | PENDING_TEST_RESULT
             test_counter[num,1] += 1
         else:
@@ -184,10 +190,14 @@ class SimState():
             # initialize paths (even for susceptables)
             progression = draw_from_dist(self.inputs.severity_dist[subpop])
             patient[DISEASE_PROGRESSION] = progression
+
+            # simulate time since infection
+            patient[TIME_INFECTED] = 1
             
             # dstate specific updates
             if dstate == SUSCEPTABLE:
                 self.cumulative_state_tracker[SUSCEPTABLE] += 1
+                patient[TIME_INFECTED] = 0
             
             elif dstate == RECOVERED:
                 self.cumulative_state_tracker[0:progression+3] += 1
@@ -210,6 +220,7 @@ class SimState():
             else:
                 raise UserWarning("Patient disease state is in unreachable state")
 
+
             # transmissions for day 0
             foi_contribution = self.inputs.trans_prob[0,patient[INTERVENTION],dstate] * self.inputs.contact_matrices[patient[INTERVENTION],patient[TRANSM_GROUP],:]
             self.transmissions[:] += foi_contribution
@@ -227,7 +238,7 @@ class SimState():
         intv_tracker = np.zeros((INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
         non_covid_present_dist = np.zeros(OBSERVED_STATES_NUM, dtype=float)
         daily_tests = np.zeros((TESTS_NUM, 2), dtype=int)
-        new_infections = 0
+        new_infections = np.zeros((TRANSMISSION_GROUPS_NUM), dtype=int)
         inputs = self.inputs
         # time period for transm rate:
         trans_period = T_RATE_PERIODS_NUM - 1
@@ -273,8 +284,6 @@ class SimState():
                     # perform test teturn updates
                     patient[FLAGS] = patient[FLAGS] & (~HAS_PENDING_TEST)
                     result = bool(patient[FLAGS] & PENDING_TEST_RESULT)
-                    if result:
-                        patient[FLAGS] = patient[FLAGS] | EVER_TESTED_POSITIVE
                     old_intv = patient[INTERVENTION]
                     new_intv = inputs.switch_on_test_result[old_intv,patient[OBSERVED_STATE],int(result)]
                     if new_intv != old_intv:
@@ -286,12 +295,16 @@ class SimState():
             patient[OBSERVED_STATE_TIME] += 1
 
             # update disease state
+            if patient[TIME_INFECTED] > 0:
+                patient[TIME_INFECTED] +=  1
+
             if patient[DISEASE_STATE] == SUSCEPTABLE:
                 if roll_for_incidence(patient, self.transmissions, self.transmission_groups):
                     patient[DISEASE_STATE] = INCUBATION
                     patient[FLAGS] = patient[FLAGS] & (~PRESENTED_THIS_DSTATE)
+                    patient[TIME_INFECTED] = 1
                     self.cumulative_state_tracker[INCUBATION] += 1
-                    new_infections += 1
+                    new_infections[patient[TRANSM_GROUP]] += 1
             else:
                 roll_for_transition(patient, self.cumulative_state_tracker, inputs)
             # roll for mortality

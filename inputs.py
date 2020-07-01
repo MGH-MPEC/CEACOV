@@ -93,8 +93,10 @@ def generate_test_inputs():
     testing_in = {
     f"test {test}": {
         "result return time": 0,
-        "probability of positive result": {f"for {dstate}": 0.0
-            for dstate in DISEASE_STATE_STRS},
+        "probability of positive result": {interval: 0.0
+            for interval in TEST_CHAR_THRESHOLD_STRS},
+        "sensitivity thresholds": {f"t{threshold}": (5 + 5*threshold)
+            for threshold in range(TEST_SENS_THRESHOLDS_NUM)},
         "delay to test": 0
         }
         for test in TESTS}
@@ -211,7 +213,8 @@ class Inputs():
         self.contact_matrices = np.zeros((INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, TRANSMISSION_GROUPS_NUM), dtype=float)
         # test inputs
         self.test_return_delay = np.zeros(TESTS_NUM, dtype=int)
-        self.test_characteristics = np.zeros((TESTS_NUM, DISEASE_STATES_NUM), dtype=float)
+        self.test_characteristics = np.zeros((TESTS_NUM, len(TEST_CHAR_THRESHOLD_STRS)), dtype=float)
+        self.test_sens_thresholds = np.ones((TESTS_NUM, TEST_SENS_THRESHOLDS_NUM + 1), dtype=int)
         self.test_lag = np.zeros((TESTS_NUM), dtype=int)
         # intervention
         self.prob_present = np.zeros((INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
@@ -286,7 +289,8 @@ class Inputs():
         for test in TESTS:
             self.test_return_delay[test] = test_inputs[test][0]
             self.test_characteristics[test,:] = test_inputs[test][1]
-            self.test_lag[test] = test_inputs[test][2]
+            self.test_sens_thresholds[test,1:] = test_inputs[test][2]
+            self.test_lag[test] = test_inputs[test][3]
 
         # intervention strategies
         intv_strat_inputs =  param_dict["testing strategies"]

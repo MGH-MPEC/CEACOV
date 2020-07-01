@@ -18,15 +18,15 @@ class InvalidParamError(Exception):
 MODEL_VERSION = "v0.7"
 
 # State var indices
-NUM_STATE_VARS = 10
+NUM_STATE_VARS = 11
 
-STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, TRANSM_GROUP, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_TEST_RETURN = range(NUM_STATE_VARS)
+STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, TRANSM_GROUP, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_TEST_RETURN, TIME_INFECTED = range(NUM_STATE_VARS)
 
 # Flags (bitwise flags in powers of 2)
 
-FLAGS_NUM = 7
+FLAGS_NUM = 6
 
-IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI, EVER_TESTED_POSITIVE = map(lambda x: 2 ** x, range(FLAGS_NUM))
+IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI = map(lambda x: 2 ** x, range(FLAGS_NUM))
 
 # Demographic State
 
@@ -79,11 +79,11 @@ RESOURCE_STRS = [f"resource {i}" for i in range(0,RESOURCES_NUM)]
 
 # Interventions
 
-INTERVENTIONS_NUM = 8
+INTERVENTIONS_NUM = 18
 
 INTERVENTIONS = range(INTERVENTIONS_NUM)
 
-INTERVENTION_STRS = tuple(["no intervention"] + [f"intervention {i}" for i in range(1,INTERVENTIONS_NUM)])
+INTERVENTION_STRS = tuple([f"intervention {i}" for i in range(INTERVENTIONS_NUM)])
 
 
 OBSERVED_STATES_NUM = 5
@@ -99,6 +99,11 @@ T_RATE_PERIODS_NUM = 5
 
 TESTS_NUM = 8
 
+TEST_SENS_THRESHOLDS_NUM = 4
+
+TEST_CHAR_THRESHOLD_STRS = ["never infected", "1 <= time_infected < t1", "t1 <= time_infected < t2",
+									  "t2 <= time_infected < t3", "t3 <= time_infected < t4", "time_infected >= t4"]
+
 TESTS = range(TESTS_NUM)
 
 # Costs
@@ -108,7 +113,7 @@ COST_STRS = ("test costs", "intervention costs", "mortality costs")
 # Outcomes
 
 DAILY_OUTCOME_STRS = ["day#"] + list(DISEASE_STATE_STRS) + [f"cumulative {state}" for state in DISEASE_PROGRESSION_STRS] + \
-					 ["new infections", "cumulative infections", "dead"] + [f"mortality for {subpop}" for subpop in SUBPOPULATION_STRS] + \
-					 [f"FoI {tgroup} -> {igroup}" for tgroup in TRANSMISSION_GROUP_STRS for igroup in TRANSMISSION_GROUP_STRS] + \
+					 [f"{igroup} new infections" for igroup in TRANSMISSION_GROUP_STRS] + ["cumulative infections", "dead"] + [f"mortality for {subpop}" for subpop in SUBPOPULATION_STRS] + \
+					 [f"FoI {tgroup} -> {igroup}" for igroup in TRANSMISSION_GROUP_STRS for tgroup in TRANSMISSION_GROUP_STRS] + \
 					 ["non-covid presenting"] + list(INTERVENTION_STRS) +  [f"test {n} ({status})" for n in TESTS for status in ("-","+")] + list(COST_STRS) + \
 					 [f"resource untilization {rsc}" for rsc in range(RESOURCES_NUM)] + [f"mortality on {intv}" for intv in INTERVENTION_STRS]
