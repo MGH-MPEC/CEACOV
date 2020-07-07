@@ -76,6 +76,9 @@ def roll_for_transition(patient, state_tracker, inputs):
             patient[FLAGS] = patient[FLAGS] & (~PRESENTED_THIS_DSTATE)
             if new_state == RECOVERED:
                 patient[FLAGS] = patient[FLAGS] & ~(IS_INFECTED)
+                # roll for immunity on recovery
+                if np.random.random() >= inputs.initial_prob_immunity[intv,severity]:
+                    patient[DISEASE_STATE] = SUSCEPTABLE
             return True
         else:
             return False
@@ -151,27 +154,33 @@ def switch_intervention(patient, inputs, new_intervention, new_obs_state, resour
 # Main simulation class
 class SimState():
     def __init__(self, inputs):
-        self.day = 0
-        self.cohort = np.zeros((inputs.cohort_size, NUM_STATE_VARS), dtype=np.intc)
-        # to transmission group
-        self.transmissions = np.zeros(TRANSMISSION_GROUPS_NUM, dtype=float)
         self.inputs = inputs
         self.outputs = Outputs(inputs)
-        self.cumulative_state_tracker = np.zeros(DISEASE_STATES_NUM, dtype=int)
-        self.test_costs = np.zeros(TESTS_NUM, dtype=float)
-        self.intervention_costs = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
-        self.mortality_costs = 0
+        self.initialize_cohort()
+
+    def initialize_cohort(self):
+        
+        # state variables
+        self.day = 0
+        self.cohort = np.zeros((self.inputs.cohort_size, NUM_STATE_VARS), dtype=np.intc)
+        self.transmissions = np.zeros(TRANSMISSION_GROUPS_NUM, dtype=float)
         self.resource_utilization = np.zeros(RESOURCES_NUM, dtype=int)
         self.non_covids = 0
         self.transmission_groups = np.zeros(TRANSMISSION_GROUPS_NUM, dtype=int)
 
-    def initialize_cohort(self):
-        # save relevant dists as locals
+        # accumulators
+        self.cumulative_state_tracker = np.zeros(DISEASE_STATES_NUM, dtype=int)
+        self.test_costs = np.zeros(TESTS_NUM, dtype=float)
+        self.intervention_costs = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
+        self.mortality_costs = 0
+
+         # save relevant dists as locals
         tgroup_dist = self.inputs.tgroup_dist
         subpop_dist = self.inputs.subpop_dist
         disease_dist = self.inputs.dstate_dist
         severity_dist = self.inputs.severity_dist
         intv_dist = self.inputs.start_intvs
+
         # iterate over patient_array
         for patient in self.cohort:
             patient[FLAGS] = patient[FLAGS] | IS_ALIVE
@@ -183,29 +192,30 @@ class SimState():
             subpop = draw_from_dist(subpop_dist[tgroup])
             patient[SUBPOPULATION] = subpop
 
-            patient[INTERVENTION] = intv_dist[tgroup]
+            intv = intv_dist[tgroup]
+            patient[INTERVENTION] = intv
             # draw disease state
             dstate = draw_from_dist(disease_dist[tgroup])
             patient[DISEASE_STATE] = dstate
             # initialize paths (even for susceptables)
             progression = draw_from_dist(self.inputs.severity_dist[subpop])
             patient[DISEASE_PROGRESSION] = progression
-
-            # simulate time since infection
-            patient[TIME_INFECTED] = 1
-            
+          
             # dstate specific updates
+
             if dstate == SUSCEPTABLE:
                 self.cumulative_state_tracker[SUSCEPTABLE] += 1
-                patient[TIME_INFECTED] = 0
-            
+                # patient[TIME_INFECTED] is already set to 0
+
             elif dstate == RECOVERED:
                 self.cumulative_state_tracker[0:progression+3] += 1
                 self.cumulative_state_tracker[RECOVERED] += 1
+                patient[TIME_INFECTED] += np.random.randint(45) # these are numbers from Pooyan, pretty arbitrary
 
             elif dstate == INCUBATION:
                 patient[FLAGS] = patient[FLAGS] | IS_INFECTED
                 self.cumulative_state_tracker[0:INCUBATION+1] += 1
+                patient[TIME_INFECTED] = 1
             
             elif dstate < RECUPERATION: # Asymptomatic, Mild/Moderate, Severe, Critical
                 patient[FLAGS] = patient[FLAGS] | IS_INFECTED
@@ -220,6 +230,18 @@ class SimState():
             else:
                 raise UserWarning("Patient disease state is in unreachable state")
 
+            # initialize time infected
+            if dstate > INCUBATION:
+                patient[TIME_INFECTED] += 1 # patients start one day into current dstate
+                for ds in range(dstate):
+                    if PROGRESSION_PATHS[progression][ds] != -1:
+                        p = self.inputs.progression_probs[intv, progression, ds]
+                        if ds == CRITICAL: # can't forget surviorship bias!
+                            p = 1 - ((1 - p) * (1 - self.inputs.mortality_probs[subpop, intv, CRITICAL]))
+                        try:
+                            patient[TIME_INFECTED] += np.random.geometric(p)
+                        except ValueError: # in case of 0 prob progression in debug runs, just ignore initialization
+                            pass
 
             # transmissions for day 0
             foi_contribution = self.inputs.trans_prob[0,patient[INTERVENTION],dstate] * self.inputs.contact_matrices[patient[INTERVENTION],patient[TRANSM_GROUP],:]
@@ -243,7 +265,7 @@ class SimState():
         # time period for transm rate:
         trans_period = T_RATE_PERIODS_NUM - 1
         for i in range(T_RATE_PERIODS_NUM - 1):
-            if self.day <= inputs.trans_rate_thresholds[i]:
+            if self.day < inputs.trans_rate_thresholds[i]:
                 trans_period = i
                 break
         # loop over cohort

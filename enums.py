@@ -101,8 +101,8 @@ TESTS_NUM = 8
 
 TEST_SENS_THRESHOLDS_NUM = 4
 
-TEST_CHAR_THRESHOLD_STRS = ["never infected", "1 <= time_infected < t1", "t1 <= time_infected < t2",
-									  "t2 <= time_infected < t3", "t3 <= time_infected < t4", "time_infected >= t4"]
+TEST_CHAR_THRESHOLD_STRS = ["never infected", "1 <= time_infected < t0", "t0 <= time_infected < t1",
+									  "t1 <= time_infected < t2", "t2 <= time_infected < t3", "time_infected >= t3"]
 
 TESTS = range(TESTS_NUM)
 

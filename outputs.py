@@ -34,10 +34,6 @@ class Outputs:
         self.non_covid_presenting[day] = non_covid
         self.costs[day] = costs
 
-
-    def log_costs(self, test_costs, intervention_costs, mortality_costs):
-        self.daily_costs[day, patient[SUBPOPULATION]] += 1
-
     def write_outputs(self, file, state_detail=None):
         outcomes = DAILY_OUTCOME_STRS
         header = "\t".join(outcomes)
@@ -49,7 +45,7 @@ class Outputs:
         data[:,index["tn_group 0 new infections"]:index["tn_group 0 new infections"] + TRANSMISSION_GROUPS_NUM] = self.daily_new_infections
         data[:,index["cumulative infections"]] = np.full(self.inputs.time_horizon, self.inputs.cohort_size, dtype=int) - np.sum(self.daily_states[:,:,SUSCEPTABLE], axis=1)
         data[:,index["dead"]] = np.cumsum(np.sum(self.daily_mortality, axis=(1,2)))
-        data[:,index["dead"] + 1 : index["dead"] + 1 + SUBPOPULATIONS_NUM] = np.sum(self.daily_mortality, axis=2)   
+        data[:,index["dead"] + 1 : index["dead"] + 1 + SUBPOPULATIONS_NUM] = np.sum(self.daily_mortality, axis=2)
         data[:,index["FoI tn_group 0 -> tn_group 0"]:index["FoI tn_group 0 -> tn_group 0"] + (TRANSMISSION_GROUPS_NUM**2)] = np.reshape(np.swapaxes(self.daily_transmission, 1, 2), (-1, TRANSMISSION_GROUPS_NUM**2))
         data[:,index["non-covid presenting"]] = self.non_covid_presenting        
         data[:,index["intervention 0"]:index["intervention 0"] + INTERVENTIONS_NUM] = np.sum(self.daily_interventions,axis=2)

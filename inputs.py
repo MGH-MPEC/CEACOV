@@ -55,7 +55,7 @@ def generate_progression_inputs():
         for intv in INTERVENTIONS}
     prog_in["daily prob recovery from severe state in critical path"] = {f"for {INTERVENTION_STRS[intv]}": 0
         for intv in INTERVENTIONS}
-    prog_in["initial immunity on recovery probability"] = {f"for {INTERVENTION_STRS[intv]}": {f"for severity = {severity}": 1
+    prog_in["initial immunity on recovery probability"] = {f"for {INTERVENTION_STRS[intv]}": {f"for severity = {DISEASE_PROGRESSION_STRS[severity]}": 1
             for severity in DISEASE_PROGRESSIONS}
         for intv in INTERVENTIONS}
     return prog_in
