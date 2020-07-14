@@ -10,12 +10,12 @@ import numpy as np
 # Exeptions
 
 class InvalidParamError(Exception):
-	""" class for invalid input errors"""
-	pass
+    """ class for invalid input errors"""
+    pass
 
 # Meta Params
 
-MODEL_VERSION = "v0.7"
+MODEL_VERSION = "v0.8"
 
 # State var indices
 NUM_STATE_VARS = 11
@@ -51,6 +51,8 @@ TRANSMISSION_GROUPS_NUM = 4
 
 TRANSMISSION_GROUP_STRS = [f"tn_group {n}" for n in range(TRANSMISSION_GROUPS_NUM)]
 
+T_RATE_PERIODS_NUM = 5
+
 
 # Covid Disease State
 
@@ -67,15 +69,22 @@ DISEASE_PROGRESSIONS = TO_ASYMP, TO_MODERATE, TO_SEVERE, TO_CRITICAL = range(DIS
 DISEASE_PROGRESSION_STRS = ("asymptomatic", "mild/moderate", "severe", "critical")
 
 PROGRESSION_PATHS = np.array([[-1, ASYMP, RECOVERED, -1, -1, -1, -1, SUSCEPTABLE],
-         					  [-1, ASYMP, MODERATE, RECOVERED, -1, -1, -1, SUSCEPTABLE],
-          					  [-1, ASYMP, MODERATE, SEVERE, RECOVERED, -1, -1, SUSCEPTABLE],
-          					  [-1, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED, SUSCEPTABLE]], dtype=int)
+                              [-1, ASYMP, MODERATE, RECOVERED, -1, -1, -1, SUSCEPTABLE],
+                              [-1, ASYMP, MODERATE, SEVERE, RECOVERED, -1, -1, SUSCEPTABLE],
+                              [-1, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED, SUSCEPTABLE]], dtype=int)
+
+PRE_RECOVERY_STATES = np.array([[0, 0, 0, 0, 0, 0, 0, 0],
+                                [0, 0, 1, 0, 0, 0, 0, 0],
+                                [0, 0, 1, 1, 0, 0, 0, 0],
+                                [0, 0, 1, 1, 1, 0, 0, 0]], dtype=bool)
 
 # Resources
 
 RESOURCES_NUM = 8
 
 RESOURCE_STRS = [f"resource {i}" for i in range(0,RESOURCES_NUM)]
+
+RESOURCES_PERIODS_NUM = 5
 
 # Interventions
 
@@ -93,16 +102,16 @@ OBSERVED_STATES = SYMP_ASYMP, SYMP_MODERATE, SYMP_SEVERE, SYMP_CRITICAL, SYMP_RE
 OBSERVED_STATE_STRS = ("no symptoms", "mild/moderate", "severe", "critical", "recuperation")
 
 
-T_RATE_PERIODS_NUM = 5
-
 # Testing
 
 TESTS_NUM = 8
 
+TEST_AVAILABILITY_PERIODS_NUM = 5
+
 TEST_SENS_THRESHOLDS_NUM = 4
 
 TEST_CHAR_THRESHOLD_STRS = ["never infected", "1 <= time_infected < t0", "t0 <= time_infected < t1",
-									  "t1 <= time_infected < t2", "t2 <= time_infected < t3", "time_infected >= t3"]
+                                      "t1 <= time_infected < t2", "t2 <= time_infected < t3", "time_infected >= t3"]
 
 TESTS = range(TESTS_NUM)
 
@@ -113,7 +122,7 @@ COST_STRS = ("test costs", "intervention costs", "mortality costs")
 # Outcomes
 
 DAILY_OUTCOME_STRS = ["day#"] + list(DISEASE_STATE_STRS) + [f"cumulative {state}" for state in DISEASE_PROGRESSION_STRS] + \
-					 [f"{igroup} new infections" for igroup in TRANSMISSION_GROUP_STRS] + ["cumulative infections", "dead"] + [f"mortality for {subpop}" for subpop in SUBPOPULATION_STRS] + \
-					 [f"FoI {tgroup} -> {igroup}" for igroup in TRANSMISSION_GROUP_STRS for tgroup in TRANSMISSION_GROUP_STRS] + \
-					 ["non-covid presenting"] + list(INTERVENTION_STRS) +  [f"test {n} ({status})" for n in TESTS for status in ("-","+")] + list(COST_STRS) + \
-					 [f"resource untilization {rsc}" for rsc in range(RESOURCES_NUM)] + [f"mortality on {intv}" for intv in INTERVENTION_STRS]
+                     [f"{igroup} new infections" for igroup in TRANSMISSION_GROUP_STRS] + ["cumulative infections", "dead"] + [f"mortality for {subpop}" for subpop in SUBPOPULATION_STRS] + \
+                     [f"FoI {tgroup} -> {igroup}" for igroup in TRANSMISSION_GROUP_STRS for tgroup in TRANSMISSION_GROUP_STRS] + \
+                     ["non-covid presenting"] + list(INTERVENTION_STRS) +  [f"test {n} ({status})" for n in TESTS for status in ("-","+")] + list(COST_STRS) + \
+                     [f"resource untilization {rsc}" for rsc in range(RESOURCES_NUM)] + [f"mortality on {intv}" for intv in INTERVENTION_STRS]
