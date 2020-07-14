@@ -53,8 +53,7 @@ def generate_progression_inputs():
                 for dstate in DISEASE_STATES if (PROGRESSION_PATHS[severity][dstate] != -1)}
             for severity in DISEASE_PROGRESSIONS}
         for intv in INTERVENTIONS}
-    prog_in["daily prob recovery from severe state in critical path"] = {f"for {INTERVENTION_STRS[intv]}": 0
-        for intv in INTERVENTIONS}
+
     prog_in["initial immunity on recovery probability"] = {f"for {INTERVENTION_STRS[intv]}": {f"for severity = {DISEASE_PROGRESSION_STRS[severity]}": 1
             for severity in DISEASE_PROGRESSIONS}
         for intv in INTERVENTIONS}
@@ -62,8 +61,7 @@ def generate_progression_inputs():
 
 
 def generate_mortality_inputs():
-    mort_in = {f"daily mortality prob for {subpop}": {f"on {intv}": {f"while {dstate}": 0
-                for dstate in DISEASE_STATE_STRS[SEVERE:CRITICAL+1]}
+    mort_in = {f"daily mortality prob for {subpop} while critical": {f"on {intv}": 0
             for intv in INTERVENTION_STRS}
         for subpop in SUBPOPULATION_STRS}
     return mort_in
@@ -80,7 +78,7 @@ def generate_transmission_inputs():
             for intv in INTERVENTION_STRS}
         for threshold in ["for 0 <= day# < t0"] +
                           [f"for t{i} <= day# < t{i+1}" for i in range(T_RATE_PERIODS_NUM-2)] +
-                          [f"day# > t{T_RATE_PERIODS_NUM-1}"]},
+                          [f"day# > t{T_RATE_PERIODS_NUM-2}"]},
     "contact matrix":{f"for {intv}": {f"from {tgroup}": {f"to {igroup}": 1
                 for igroup in TRANSMISSION_GROUP_STRS}
             for tgroup in TRANSMISSION_GROUP_STRS}
@@ -91,15 +89,25 @@ def generate_transmission_inputs():
 
 def generate_test_inputs():
     testing_in = {
-    f"test {test}": {
-        "result return time": 0,
-        "probability of positive result": {interval: 0.0
-            for interval in TEST_CHAR_THRESHOLD_STRS},
-        "sensitivity thresholds": {f"t{threshold}": (5 + 5*threshold)
-            for threshold in range(TEST_SENS_THRESHOLDS_NUM)},
-        "delay to test": 0
-        }
+    "test availability thresholds": {f"t{threshold}": (10 + 10*threshold)
+        for threshold in range(TEST_AVAILABILITY_PERIODS_NUM-1)},
+    "daily test availabilities": {threshold: {f"test {test}": 0
+            for test in TESTS}
+        for threshold in ["for 0 <= day# < t0"] +
+                          [f"for t{i} <= day# < t{i+1}" for i in range(TEST_AVAILABILITY_PERIODS_NUM-2)] +
+                          [f"day# > t{TEST_AVAILABILITY_PERIODS_NUM-2}"]}
+    }
+    testing_in.update(
+        {f"test {test}": {
+            "result return time": 0,
+            "probability of positive result": {interval: 0.0
+                for interval in TEST_CHAR_THRESHOLD_STRS},
+            "sensitivity thresholds": {f"t{threshold}": (5 + 5*threshold)
+                for threshold in range(TEST_SENS_THRESHOLDS_NUM)},
+            "delay to test": 0
+            }
         for test in TESTS}
+        )
     return testing_in
 
 
@@ -114,7 +122,7 @@ def generate_testing_strat_inputs():
             for symstate in OBSERVED_STATE_STRS},
         "test number": {f"if observed {symstate}": 0
             for symstate in OBSERVED_STATE_STRS},
-        "testing frequency": {f"if observed {symstate}": 1
+        "testing interval": {f"if observed {symstate}": 1
             for symstate in OBSERVED_STATE_STRS},
         "probability receive test": {f"if observed {symstate}": {f"for {subpop}": 0
                 for subpop in SUBPOPULATION_STRS}
@@ -137,8 +145,13 @@ def generate_cost_inputs():
 
 def generate_resource_inputs():
     rsc_in = {
-    "resource availabilities": {resource: 0
-        for resource in RESOURCE_STRS},
+    "resource availability thresholds": {f"t{threshold}": (10 + 10*threshold)
+        for threshold in range(RESOURCES_PERIODS_NUM - 1)},
+    "resource availabilities": {threshold: {resource: 0
+            for resource in RESOURCE_STRS}
+        for threshold in ["for 0 <= day# < t0"] +
+                          [f"for t{i} <= day# < t{i+1}" for i in range(RESOURCES_PERIODS_NUM-2)] +
+                          [f"day# > t{RESOURCES_PERIODS_NUM-2}"]},
     "resource requirements":{f"for {intervention}":{f"if observed {symstate}": []
             for symstate in OBSERVED_STATE_STRS}
         for intervention in INTERVENTION_STRS},
@@ -203,15 +216,16 @@ class Inputs():
         self.start_intvs = np.zeros((TRANSMISSION_GROUPS_NUM), dtype=int)
         # transition inputs
         self.progression_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
-        self.severe_kludge_probs = np.zeros((INTERVENTIONS_NUM), dtype=float)
         self.initial_prob_immunity = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
-        self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
+        self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=float)
         #transmission inputs
         self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
         self.trans_prob = np.zeros((T_RATE_PERIODS_NUM, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         # transmissions from, transmissions to
         self.contact_matrices = np.zeros((INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, TRANSMISSION_GROUPS_NUM), dtype=float)
         # test inputs
+        self.test_availability_thresholds = np.zeros((TEST_AVAILABILITY_PERIODS_NUM-1), dtype=int)
+        self.test_availabilities = np.zeros((TEST_AVAILABILITY_PERIODS_NUM, TESTS_NUM), dtype=int)
         self.test_return_delay = np.zeros(TESTS_NUM, dtype=int)
         self.test_characteristics = np.zeros((TESTS_NUM, len(TEST_CHAR_THRESHOLD_STRS)), dtype=float)
         self.test_sens_thresholds = np.ones((TESTS_NUM, TEST_SENS_THRESHOLDS_NUM + 1), dtype=int)
@@ -227,7 +241,8 @@ class Inputs():
         self.intervention_daily_costs = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
         self.mortality_costs = np.zeros((DISEASE_STATES_NUM, INTERVENTIONS_NUM), dtype=float)
         # resource inputs
-        self.resource_base_availability = np.zeros(RESOURCES_NUM, dtype=int)
+        self.resource_availability_thresholds = np.zeros((RESOURCES_PERIODS_NUM-1), dtype=int)
+        self.resource_availabilities = np.zeros((RESOURCES_PERIODS_NUM, RESOURCES_NUM), dtype=int)
         self.resource_requirements = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=np.uint8)
         self.fallback_interventions = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=int)
         # non-covid RI
@@ -267,9 +282,8 @@ class Inputs():
                         else:                        
                             self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - INCUBATION]
 
-        self.severe_kludge_probs[:] = np.asarray(dict_to_array(param_dict["disease progression"]["daily prob recovery from severe state in critical path"]), dtype=float)
         self.initial_prob_immunity = np.asarray(dict_to_array(param_dict["disease progression"]["initial immunity on recovery probability"]), dtype=float)
-        self.mortality_probs[:,:,SEVERE:CRITICAL+1] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
+        self.mortality_probs[:,:] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
         
         # transmission inputs
         transm_params = param_dict["transmissions"]
@@ -286,11 +300,13 @@ class Inputs():
 
         # test inputs
         test_inputs = dict_to_array(param_dict["tests"])
+        self.test_availability_thresholds[:] = test_inputs[0]
+        self.test_availabilities[:,:] = test_inputs[1]
         for test in TESTS:
-            self.test_return_delay[test] = test_inputs[test][0]
-            self.test_characteristics[test,:] = test_inputs[test][1]
-            self.test_sens_thresholds[test,1:] = test_inputs[test][2]
-            self.test_lag[test] = test_inputs[test][3]
+            self.test_return_delay[test] = test_inputs[test+2][0]
+            self.test_characteristics[test,:] = test_inputs[test+2][1]
+            self.test_sens_thresholds[test,1:] = test_inputs[test+2][2]
+            self.test_lag[test] = test_inputs[test+2][3]
 
         # intervention strategies
         intv_strat_inputs =  param_dict["testing strategies"]
@@ -300,7 +316,7 @@ class Inputs():
             self.switch_on_test_result[i,:,0] = dict_to_array(strat_dict["switch to intervention on negative test result"])
             self.switch_on_test_result[i,:,1] = dict_to_array(strat_dict["switch to intervention on positive test result"])
             self.test_number[i,:] = dict_to_array(strat_dict["test number"])
-            self.testing_frequency[i,:] = dict_to_array(strat_dict["testing frequency"])
+            self.testing_frequency[i,:] = dict_to_array(strat_dict["testing interval"])
             self.prob_receive_test[i,:,:] = dict_to_array(strat_dict["probability receive test"])
         if np.any((self.switch_on_test_result < 0) | (self.switch_on_test_result >= INTERVENTIONS_NUM)):
             raise UserWarning("switch on test return inputs must be valid intervention numbers")
@@ -313,7 +329,8 @@ class Inputs():
 
         # resources
         rsc_inputs = param_dict["resources"]
-        self.resource_base_availability = np.asarray(dict_to_array(rsc_inputs["resource availabilities"]))
+        self.resource_availability_thresholds = np.asarray(dict_to_array(rsc_inputs["resource availability thresholds"]), dtype=int)
+        self.resource_availabilities = np.asarray(dict_to_array(rsc_inputs["resource availabilities"]), dtype=int)
         requirements = dict_to_array(rsc_inputs["resource requirements"])
         for intervention in INTERVENTIONS:
             for symstate in OBSERVED_STATES:

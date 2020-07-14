@@ -10,16 +10,14 @@ import math
 from enums import *
 from outputs import Outputs
 
-# returns an index drawn from the specified distribution
-def draw_from_dist(dist):
-    cumulative_dist = 0
-    draw = np.random.random()
-    for i in range(dist.size):
-        cumulative_dist += dist[i]
-        if cumulative_dist > draw:
+
+# returns the index of the bin to which a value belongs
+# linear search - use np.digitize for longer arrays
+def digitize_linear(x, thresholds):
+    for i in range(len(thresholds)):
+        if x < thresholds[i]:
             return i
-        i += 1
-    raise InvalidParamError("probabilites must sum to 1")
+    return len(thresholds)
 
 
 # utility functions to work with exponential rates and probabilities
@@ -85,7 +83,7 @@ def roll_for_transition(patient, state_tracker, inputs):
 
 
 def roll_for_mortality(patient, inputs, resource_utilization):
-    prob_mort = inputs.mortality_probs[patient[SUBPOPULATION], patient[INTERVENTION], patient[DISEASE_STATE]]
+    prob_mort = inputs.mortality_probs[patient[SUBPOPULATION], patient[INTERVENTION]]
     if np.random.random() < prob_mort:
         patient[FLAGS] = patient[FLAGS] & (~IS_ALIVE)
         resource_utilization -= np.unpackbits(inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
@@ -94,18 +92,18 @@ def roll_for_mortality(patient, inputs, resource_utilization):
         return False
 
 
-def roll_for_presentation(patient, resource_use, inputs):
+def roll_for_presentation(patient, resource_use, resource_availability, inputs):
     if np.random.random() < inputs.prob_present[patient[INTERVENTION],patient[DISEASE_STATE]]:
         patient[FLAGS] = patient[FLAGS] | PRESENTED_THIS_DSTATE
         patient[FLAGS] = patient[FLAGS] & (~NON_COVID_RI)
         patient[OBSERVED_STATE_TIME] = 0
         if patient[DISEASE_STATE] in DISEASE_STATES[MODERATE:RECUPERATION+1]:
             new_obs_state = patient[DISEASE_STATE]-MODERATE+1
-            switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use)
+            switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use, resource_availability)
             patient[OBSERVED_STATE] = new_obs_state
         else:
             new_obs_state = SYMP_ASYMP
-            switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use)
+            switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use, resource_availability)
             patient[OBSERVED_STATE] = new_obs_state
         return True
     else:
@@ -134,14 +132,14 @@ def roll_for_testing(patient, test_counter, inputs):
     else:
         return False
 
-def switch_intervention(patient, inputs, new_intervention, new_obs_state, resource_utilization):
+def switch_intervention(patient, inputs, new_intervention, new_obs_state, resource_utilization, resource_availability):
     # return resources to the pool
     resource_utilization -= np.unpackbits(inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
     # loop through until requirements are met
     new_intv = new_intervention
     new_req = inputs.resource_requirements[new_intv, new_obs_state]
     count = 0
-    while np.packbits(0 >= inputs.resource_base_availability - resource_utilization) & new_req: # does not meet requirment
+    while np.packbits(0 >= resource_availability - resource_utilization) & new_req: # does not meet requirment
         new_intv = inputs.fallback_interventions[new_intv, new_obs_state]
         new_req = inputs.resource_requirements[new_intv, new_obs_state]
         count += 1
@@ -185,20 +183,20 @@ class SimState():
         for patient in self.cohort:
             patient[FLAGS] = patient[FLAGS] | IS_ALIVE
             # draw demographics
-            tgroup = draw_from_dist(tgroup_dist)
+            tgroup = np.random.choice(TRANSMISSION_GROUPS_NUM, p=tgroup_dist)
             patient[TRANSM_GROUP] = tgroup
             self.transmission_groups[tgroup] += 1
 
-            subpop = draw_from_dist(subpop_dist[tgroup])
+            subpop = np.random.choice(SUBPOPULATIONS_NUM, p=subpop_dist[tgroup])
             patient[SUBPOPULATION] = subpop
 
             intv = intv_dist[tgroup]
             patient[INTERVENTION] = intv
             # draw disease state
-            dstate = draw_from_dist(disease_dist[tgroup])
+            dstate = np.random.choice(DISEASE_STATES_NUM, p=disease_dist[tgroup])
             patient[DISEASE_STATE] = dstate
             # initialize paths (even for susceptables)
-            progression = draw_from_dist(self.inputs.severity_dist[subpop])
+            progression = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=severity_dist[subpop])
             patient[DISEASE_PROGRESSION] = progression
           
             # dstate specific updates
@@ -262,12 +260,11 @@ class SimState():
         daily_tests = np.zeros((TESTS_NUM, 2), dtype=int)
         new_infections = np.zeros((TRANSMISSION_GROUPS_NUM), dtype=int)
         inputs = self.inputs
-        # time period for transm rate:
-        trans_period = T_RATE_PERIODS_NUM - 1
-        for i in range(T_RATE_PERIODS_NUM - 1):
-            if self.day < inputs.trans_rate_thresholds[i]:
-                trans_period = i
-                break
+        # calculate time period for model-time stratified inputs
+        trans_period = digitize_linear(self.day, inputs.trans_rate_thresholds)
+        resource_availability = inputs.resource_availabilities[digitize_linear(self.day, inputs.resource_availability_thresholds), :]        
+        test_availability = inputs.test_availabilities[digitize_linear(self.day, inputs.test_availability_thresholds), :]
+
         # loop over cohort
         for patient in self.cohort:
             if not (patient[FLAGS] & IS_ALIVE):     # if patient is dead, nothing to do
@@ -289,16 +286,17 @@ class SimState():
             else:# has non-covid RI
                 patient[NON_COVID_TIME] -= 1 # countdown non-covid symptom duration
                 if (patient[NON_COVID_TIME] == 0) or (patient[FLAGS] & IS_INFECTED): #non-covid duration is up or *newly* infected COVID
-                    switch_intervention(patient, inputs, patient[INTERVENTION], SYMP_ASYMP, self.resource_utilization)
+                    switch_intervention(patient, inputs, patient[INTERVENTION], SYMP_ASYMP, self.resource_utilization, resource_availability)
                     patient[OBSERVED_STATE] = SYMP_ASYMP
                     patient[OBSERVED_STATE_TIME] = 0
                     patient[FLAGS] = patient[FLAGS] & ~(NON_COVID_RI + PRESENTED_THIS_DSTATE)
                     self.non_covids -= 1
 
             # update treatment/testing state
-            if (patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, inputs)) and (not patient[FLAGS] & HAS_PENDING_TEST):
+            if (patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, resource_availability, inputs)) and (not patient[FLAGS] & HAS_PENDING_TEST):
                 test = inputs.test_number[patient[INTERVENTION],patient[OBSERVED_STATE]]                
-                if ((patient[OBSERVED_STATE_TIME] - inputs.test_lag[test]) % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0):
+                if (((patient[OBSERVED_STATE_TIME] - inputs.test_lag[test]) % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0) and 
+                    (test_availability[test] > np.sum(daily_tests[test]))):
                     if roll_for_testing(patient, daily_tests, inputs):
                         self.test_costs[test] += inputs.testing_costs[test]
             if patient[FLAGS] & HAS_PENDING_TEST:
@@ -309,7 +307,7 @@ class SimState():
                     old_intv = patient[INTERVENTION]
                     new_intv = inputs.switch_on_test_result[old_intv,patient[OBSERVED_STATE],int(result)]
                     if new_intv != old_intv:
-                        switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization)
+                        switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization, resource_availability)
                         patient[OBSERVED_STATE_TIME] = -1
                 else:
                     patient[TIME_TO_TEST_RETURN] -= 1
@@ -330,7 +328,7 @@ class SimState():
             else:
                 roll_for_transition(patient, self.cumulative_state_tracker, inputs)
             # roll for mortality
-            if (patient[DISEASE_STATE] == CRITICAL) or (patient[DISEASE_PROGRESSION] == TO_SEVERE and patient[DISEASE_STATE] == SEVERE):
+            if patient[DISEASE_STATE] == CRITICAL:
                 roll_for_mortality(patient, inputs, self.resource_utilization)
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
