@@ -181,19 +181,29 @@ def generate_non_covid_inputs():
         for symstate in OBSERVED_STATE_STRS[SYMP_MODERATE:SYMP_CRITICAL+1]},
     }
     return no_co_in
-"""
-def generate_prophilaxis_inputs():
+
+def generate_prophylaxis_inputs():
     proph_in = {
-    "enable prophalaxis module": False,
-    "prophalaxis efficacy":
-    "target coverage": 1,
-    "initial coverage": 0,
-    "time of target coverage": 20,
-    "probability of dropout thresholds":
-    "probability of dropout":
+        "enable prophylaxis module": False,
+        "prophylaxis efficacy": 1,
+        "target coverage": 1,
+        "initial coverage": 0,
+        "time of target coverage": 20,
+        "probability of dropout time thresholds": {
+            f"t{threshold}": (10 + 10*threshold)
+                for threshold in range(PROPH_DROPOUT_PERIODS_NUM-1)
+        },
+        "probability of dropout": {
+            threshold: 0
+                for threshold in ["for 0 <= day# < t0"] +
+                                 [f"for t{i} <= day# < t{i+1}"
+                                    for i in range(PROPH_DROPOUT_PERIODS_NUM-2)] +
+                                 [f"day# > t{PROPH_DROPOUT_PERIODS_NUM-2}"]
+        }
     }
     return proph_in
-"""
+
+
 # generate imput format
 def generate_input_dict():
     inputs = {}
@@ -219,6 +229,8 @@ def generate_input_dict():
     inputs["resources"] = generate_resource_inputs()
     # Non-COVID RI
     inputs["non-covid illness"] = generate_non_covid_inputs()
+    # Prophyaxis
+    inputs["Prophyaxis"] = generate_prophylaxis_inputs()
 
     return inputs
 
