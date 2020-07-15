@@ -24,9 +24,9 @@ STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, TRANSM_GROUP, OBSERVED_STATE,
 
 # Flags (bitwise flags in powers of 2)
 
-FLAGS_NUM = 6
+FLAGS_NUM = 7
 
-IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI = map(lambda x: 2 ** x, range(FLAGS_NUM))
+IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI, PRE_RECOVERY = map(lambda x: 2 ** x, range(FLAGS_NUM))
 
 # Demographic State
 
@@ -73,10 +73,14 @@ PROGRESSION_PATHS = np.array([[-1, ASYMP, RECOVERED, -1, -1, -1, -1, SUSCEPTABLE
                               [-1, ASYMP, MODERATE, SEVERE, RECOVERED, -1, -1, SUSCEPTABLE],
                               [-1, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED, SUSCEPTABLE]], dtype=int)
 
-PRE_RECOVERY_STATES = np.array([[0, 0, 0, 0, 0, 0, 0, 0],
-                                [0, 0, 1, 0, 0, 0, 0, 0],
-                                [0, 0, 1, 1, 0, 0, 0, 0],
-                                [0, 0, 1, 1, 1, 0, 0, 0]], dtype=bool)
+HAS_PRE_RECOVERY_STATE = np.array([[0, 0, 0, 0, 0, 0, 0, 0],
+                                   [0, 0, 1, 0, 0, 0, 0, 0],
+                                   [0, 0, 1, 1, 0, 0, 0, 0],
+                                   [0, 0, 1, 1, 1, 0, 0, 0]], dtype=bool)
+
+PROG_TYPES_NUM = 3
+
+PROG_TYPES = (PROG_NONE, PROG_NORMAL, PROG_PRE_REC) = range(PROG_TYPES_NUM)
 
 # Resources
 

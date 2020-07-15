@@ -46,40 +46,41 @@ def roll_for_incidence(patient, transmissions, t_group_sizes):
 
 
 def roll_for_transition(patient, state_tracker, inputs):
+    """handles transitions except for incidence"""
     intv = patient[INTERVENTION]
     dstate = patient[DISEASE_STATE]
     severity = patient[DISEASE_PROGRESSION]
-    prob_trans = inputs.progression_probs[intv, severity, dstate]
-    # gross case for severe->recovered in critical path. Hopefully temporary...
-    if (severity == TO_CRITICAL) and (dstate == SEVERE):
-        prob_critical = inputs.progression_probs[intv, severity, dstate]
-        prob_recovery = inputs.severe_kludge_probs[intv]
-        trans = draw_from_dist(np.array([(1-prob_critical-prob_recovery), prob_recovery, prob_critical]))
-        if trans:
-            new_state = RECOVERED if (trans == 1) else CRITICAL
-            state_tracker[new_state] += 1
-            patient[DISEASE_STATE] = new_state
-            patient[FLAGS] = patient[FLAGS] & (~PRESENTED_THIS_DSTATE)
-            if new_state == RECOVERED:
-                patient[FLAGS] = patient[FLAGS] & ~(IS_INFECTED)
-            return True
-        else:
-            return False
+    new_state = None
+
+    if patient[FLAGS] & PRE_RECOVERY:
+        # roll for pre-recovery -> recovered
+        if np.random.random() < inputs.expedited_recovery_probs[intv,severity,dstate]:
+            new_state = RECOVERED
+            patient[FLAGS] = patient[FLAGS] & (~PRE_RECOVERY)
     else:
-        prob_trans = inputs.progression_probs[intv, severity, dstate]
-        if np.random.random() < prob_trans: # state changed
+        # roll for normal progression or pre-recovery
+        trans_type = np.random.choice(PROG_TYPES_NUM, p=inputs.progression_probs[intv,severity,dstate])
+        if trans_type == PROG_NORMAL:
             new_state = PROGRESSION_PATHS[severity, dstate]
-            state_tracker[new_state] += 1
-            patient[DISEASE_STATE] = new_state
-            patient[FLAGS] = patient[FLAGS] & (~PRESENTED_THIS_DSTATE)
-            if new_state == RECOVERED:
-                patient[FLAGS] = patient[FLAGS] & ~(IS_INFECTED)
-                # roll for immunity on recovery
-                if np.random.random() >= inputs.initial_prob_immunity[intv,severity]:
-                    patient[DISEASE_STATE] = SUSCEPTABLE
-            return True
-        else:
-            return False
+        elif trans_type == PROG_PRE_REC:
+        # transitioning to pre-rec, no state change
+            patient[FLAGS] = patient[FLAGS] | PRE_RECOVERY
+
+    if new_state is not None:
+        
+        if new_state == RECOVERED:
+            patient[FLAGS] = patient[FLAGS] & ~(IS_INFECTED)
+            # roll for immunity on recovery
+            if np.random.random() >= inputs.initial_prob_immunity[intv,severity]:
+                new_state = SUSCEPTABLE
+        
+        # update patient
+        patient[DISEASE_STATE] = new_state
+        state_tracker[new_state] += 1
+        patient[FLAGS] = patient[FLAGS] & (~PRESENTED_THIS_DSTATE)
+        return True
+    else:  # no transition
+        return False
 
 
 def roll_for_mortality(patient, inputs, resource_utilization):
@@ -133,15 +134,16 @@ def roll_for_testing(patient, test_counter, inputs):
         return False
 
 def switch_intervention(patient, inputs, new_intervention, new_obs_state, resource_utilization, resource_availability):
+    rec_reqs = inputs.resource_requirements
     # return resources to the pool
-    resource_utilization -= np.unpackbits(inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
+    resource_utilization -= np.unpackbits(rec_reqs[patient[INTERVENTION], patient[OBSERVED_STATE]])
     # loop through until requirements are met
     new_intv = new_intervention
-    new_req = inputs.resource_requirements[new_intv, new_obs_state]
+    new_req = rec_reqs[new_intv, new_obs_state]
     count = 0
     while np.packbits(0 >= resource_availability - resource_utilization) & new_req: # does not meet requirment
         new_intv = inputs.fallback_interventions[new_intv, new_obs_state]
-        new_req = inputs.resource_requirements[new_intv, new_obs_state]
+        new_req = rec_reqs[new_intv, new_obs_state]
         count += 1
         if count >= INTERVENTIONS_NUM:
             raise UserWarning("No intervention available for the given resource constraints")
