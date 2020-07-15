@@ -105,6 +105,9 @@ OBSERVED_STATES = SYMP_ASYMP, SYMP_MODERATE, SYMP_SEVERE, SYMP_CRITICAL, SYMP_RE
 
 OBSERVED_STATE_STRS = ("no symptoms", "mild/moderate", "severe", "critical", "recuperation")
 
+# Prophs
+
+PROPH_DROPOUT_PERIODS_NUM = 3
 
 # Testing
 
