@@ -47,16 +47,27 @@ def generate_initialization_inputs():
 
 
 def generate_progression_inputs():
-    prog_in = {f"daily disease progression probability for {INTERVENTION_STRS[intv]}":
-            {f"for severity = {DISEASE_PROGRESSION_STRS[severity]}":
-                {f"from {DISEASE_STATE_STRS[dstate]} to {DISEASE_STATE_STRS[PROGRESSION_PATHS[severity][dstate]]}": 0
-                for dstate in DISEASE_STATES if (PROGRESSION_PATHS[severity][dstate] != -1)}
-            for severity in DISEASE_PROGRESSIONS}
-        for intv in INTERVENTIONS}
-
-    prog_in["initial immunity on recovery probability"] = {f"for {INTERVENTION_STRS[intv]}": {f"for severity = {DISEASE_PROGRESSION_STRS[severity]}": 1
-            for severity in DISEASE_PROGRESSIONS}
-        for intv in INTERVENTIONS}
+    prog_in = {
+        INTERVENTION_STRS[intv]: {
+            f"for severity = {DISEASE_PROGRESSION_STRS[severity]}": {
+            
+                "daily disease progression probability": {
+                    f"from {DISEASE_STATE_STRS[dstate]} to {DISEASE_STATE_STRS[PROGRESSION_PATHS[severity][dstate]]}": 0
+                        for dstate in DISEASE_STATES if (PROGRESSION_PATHS[severity][dstate] != -1)
+                    },
+                "daily switch to pre-recovery probability": {
+                    f"from {DISEASE_STATE_STRS[dstate]}": 0
+                        for dstate in DISEASE_STATES if HAS_PRE_RECOVERY_STATE[severity][dstate]
+                    },
+                "daily expedited recovery probability": {
+                    f"from pre-recovery: {DISEASE_STATE_STRS[dstate]}": 0
+                        for dstate in DISEASE_STATES if HAS_PRE_RECOVERY_STATE[severity][dstate]
+                    },
+                "initial immunity on recovery probability": 1
+                
+            } for severity in DISEASE_PROGRESSIONS
+        } for intv in INTERVENTIONS
+    }
     return prog_in
 
 
@@ -127,8 +138,7 @@ def generate_testing_strat_inputs():
         "probability receive test": {f"if observed {symstate}": {f"for {subpop}": 0
                 for subpop in SUBPOPULATION_STRS}
             for symstate in OBSERVED_STATE_STRS}
-        }
-        for n in INTERVENTIONS}
+        } for n in INTERVENTIONS}
     return test_strat_in
 
 def generate_cost_inputs():
@@ -171,8 +181,19 @@ def generate_non_covid_inputs():
         for symstate in OBSERVED_STATE_STRS[SYMP_MODERATE:SYMP_CRITICAL+1]},
     }
     return no_co_in
-
-
+"""
+def generate_prophilaxis_inputs():
+    proph_in = {
+    "enable prophalaxis module": False,
+    "prophalaxis efficacy":
+    "target coverage": 1,
+    "initial coverage": 0,
+    "time of target coverage": 20,
+    "probability of dropout thresholds":
+    "probability of dropout":
+    }
+    return proph_in
+"""
 # generate imput format
 def generate_input_dict():
     inputs = {}
@@ -215,7 +236,8 @@ class Inputs():
         self.severity_dist = np.zeros((SUBPOPULATIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         self.start_intvs = np.zeros((TRANSMISSION_GROUPS_NUM), dtype=int)
         # transition inputs
-        self.progression_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
+        self.progression_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM, PROG_TYPES_NUM), dtype=float)
+        self.expedited_recovery_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         self.initial_prob_immunity = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=float)
         #transmission inputs
@@ -271,18 +293,22 @@ class Inputs():
             raise UserWarning("start intervention inputs must be valid intervention numbers")
 
         # transition inputs
-        # kinda gross - consider reworking
+        # really gross - consider reworking
         prog_array = dict_to_array(param_dict["disease progression"])
         for intv in INTERVENTIONS:
             for severity in DISEASE_PROGRESSIONS:
                 for dstate in DISEASE_STATES:
-                    if (PROGRESSION_PATHS[severity][dstate] != -1):
+                    self.initial_prob_immunity[intv, severity] = prog_array[intv][severity][3]
+                    if (PROGRESSION_PATHS[severity,dstate] != -1):
                         if dstate == RECOVERED:
-                            self.progression_probs[intv][severity][RECOVERED] = prog_array[intv][severity][-1]
+                            self.progression_probs[intv,severity,RECOVERED,PROG_NORMAL] = prog_array[intv][severity][0][-1]
                         else:                        
-                            self.progression_probs[intv][severity][dstate] = prog_array[intv][severity][dstate - INCUBATION]
+                            self.progression_probs[intv,severity,dstate,PROG_NORMAL] = prog_array[intv][severity][0][dstate-INCUBATION]
+                            if (dstate >= ASYMP) and (dstate - ASYMP < severity):
+                                self.progression_probs[intv,severity,dstate,PROG_PRE_REC] = prog_array[intv][severity][1][dstate-ASYMP]
+                                self.expedited_recovery_probs[intv,severity,dstate] = prog_array[intv][severity][2][dstate-ASYMP]
+        self.progression_probs[:,:,:,PROG_NONE] = 1 - np.sum(self.progression_probs, axis=3)
 
-        self.initial_prob_immunity = np.asarray(dict_to_array(param_dict["disease progression"]["initial immunity on recovery probability"]), dtype=float)
         self.mortality_probs[:,:] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
         
         # transmission inputs
