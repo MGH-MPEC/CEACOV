@@ -119,7 +119,7 @@ def roll_for_testing(patient, test_counter, inputs):
         # get test characteristic time-from-infection interval
         time_period = TEST_SENS_THRESHOLDS_NUM + 1
         time_infected = patient[TIME_INFECTED]
-        for i in range(TEST_SENS_THRESHOLDS_NUM):
+        for i in range(TEST_SENS_THRESHOLDS_NUM + 1):
             if time_infected < inputs.test_sens_thresholds[num,i]:
                 time_period = i
                 break
