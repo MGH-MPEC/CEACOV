@@ -13,9 +13,8 @@ import os, sys
 from glob import glob
 
 
-
 if __name__ == "__main__" or __name__ == "builtins":
-    
+
     input_files = []
     # run in local directory (with python file)
     if len(sys.argv) == 1:
@@ -30,22 +29,20 @@ if __name__ == "__main__" or __name__ == "builtins":
         raise UserWarning("invalid call, unexpected arguments detected")
     # generate template file when run on empty directory
     if not input_files:
-        template = os.path.join(sys.argv[1], "covid_input_template.json")
         print("No input files detected, generating input template")
         create_input_file(os.path.join(folder, "template.json"))
-    else: 
+    else:
         # create results folder
         results_directory = os.path.join(folder, "results")
         if not os.path.exists(results_directory):
             os.makedirs(results_directory)
         # run the sim!
-        for input_file in input_files:            
+        for input_file in input_files:
             sim_state = SimState(read_inputs(input_file))
             out_file = os.path.join(results_directory, os.path.splitext(os.path.split(input_file)[1])[0] + ".tsv")
             state_file = None
             if sim_state.inputs.state_detail:
                 state_file = os.path.join(results_directory, os.path.splitext(os.path.split(input_file)[1])[0] + "_state_data.tsv")
-            print("running " + input_file) 
+            print("running " + input_file)
             sim_state.run()
             sim_state.outputs.write_outputs(out_file, state_file)
-

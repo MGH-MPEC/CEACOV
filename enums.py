@@ -7,6 +7,7 @@ COVID-19 Microsimulation Model
 
 import numpy as np
 
+
 # Exeptions
 
 class InvalidParamError(Exception):
@@ -17,10 +18,13 @@ class InvalidParamError(Exception):
 
 MODEL_VERSION = "v0.8"
 
+
 # State var indices
+
 NUM_STATE_VARS = 11
 
 STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, TRANSM_GROUP, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_TEST_RETURN, TIME_INFECTED = range(NUM_STATE_VARS)
+
 
 # Flags (bitwise flags in powers of 2)
 
@@ -28,16 +32,10 @@ FLAGS_NUM = 7
 
 IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI, PRE_RECOVERY = map(lambda x: 2 ** x, range(FLAGS_NUM))
 
+
 # Demographic State
 
-# GENDER_STRS = ("female", "male")
-
 AGE_CATEGORY_STRS = ("0-19y", "20-59y", ">=60y")
-
-# HIV_STATUS_STRS = ("HIV+", "no HIV")
-
-# COMORBIDITY_STRS = ("no comorbidities", "some comorbidities")
-
 
 SUBPOPULATIONS_NUM = 3
 
@@ -45,9 +43,9 @@ SUBPOPULATIONS = range(SUBPOPULATIONS_NUM)
 
 SUBPOPULATION_STRS = AGE_CATEGORY_STRS
 
-
-
 TRANSMISSION_GROUPS_NUM = 4
+
+TRANSMISSION_GROUPS = range(TRANSMISSION_GROUPS_NUM)
 
 TRANSMISSION_GROUP_STRS = [f"tn_group {n}" for n in range(TRANSMISSION_GROUPS_NUM)]
 
@@ -86,7 +84,7 @@ PROG_TYPES = (PROG_NONE, PROG_NORMAL, PROG_PRE_REC) = range(PROG_TYPES_NUM)
 
 RESOURCES_NUM = 8
 
-RESOURCE_STRS = [f"resource {i}" for i in range(0,RESOURCES_NUM)]
+RESOURCE_STRS = [f"resource {i}" for i in range(0, RESOURCES_NUM)]
 
 RESOURCES_PERIODS_NUM = 5
 
@@ -118,7 +116,7 @@ TEST_AVAILABILITY_PERIODS_NUM = 5
 TEST_SENS_THRESHOLDS_NUM = 4
 
 TEST_CHAR_THRESHOLD_STRS = ["never infected", "1 <= time_infected < t0", "t0 <= time_infected < t1",
-                                      "t1 <= time_infected < t2", "t2 <= time_infected < t3", "time_infected >= t3"]
+                            "t1 <= time_infected < t2", "t2 <= time_infected < t3", "time_infected >= t3"]
 
 TESTS = range(TESTS_NUM)
 

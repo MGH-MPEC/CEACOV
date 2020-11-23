@@ -14,5 +14,6 @@
 # misc
 **.DS_Store
 /test/**
+.idea/**
 
 

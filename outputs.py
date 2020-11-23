@@ -8,11 +8,12 @@ COVID-19 Microsimulation Model
 import numpy as np
 from enums import *
 
+
 class Outputs:
     def __init__(self, inputs):
         self.daily_transmission = np.zeros((inputs.time_horizon, TRANSMISSION_GROUPS_NUM, TRANSMISSION_GROUPS_NUM), dtype=float)
         self.daily_states = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM, DISEASE_STATES_NUM), dtype=int)
-        self.cumulative_states = np.zeros((inputs.time_horizon, DISEASE_STATES_NUM), dtype = int)
+        self.cumulative_states = np.zeros((inputs.time_horizon, DISEASE_STATES_NUM), dtype=int)
         self.daily_mortality = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=int)
         self.daily_interventions = np.zeros((inputs.time_horizon, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
         self.daily_tests = np.zeros((inputs.time_horizon, TESTS_NUM, 2), dtype=int)
@@ -21,6 +22,7 @@ class Outputs:
         self.daily_resource_utilization = np.zeros((inputs.time_horizon, RESOURCES_NUM), dtype=int)
         self.costs = np.zeros((inputs.time_horizon, 3), dtype=float)
         self.inputs = inputs
+
     # record statistics at end of day, called in step
     def log_daily_state(self, day, states, cumulative, transmissions, infections, mortality, interventions, tests, resources, non_covid, costs):
         self.daily_states[day, :, :] = states
@@ -47,12 +49,12 @@ class Outputs:
         data[:,index["dead"]] = np.cumsum(np.sum(self.daily_mortality, axis=(1,2)))
         data[:,index["dead"] + 1 : index["dead"] + 1 + SUBPOPULATIONS_NUM] = np.sum(self.daily_mortality, axis=2)
         data[:,index["FoI tn_group 0 -> tn_group 0"]:index["FoI tn_group 0 -> tn_group 0"] + (TRANSMISSION_GROUPS_NUM**2)] = np.reshape(np.swapaxes(self.daily_transmission, 1, 2), (-1, TRANSMISSION_GROUPS_NUM**2))
-        data[:,index["non-covid presenting"]] = self.non_covid_presenting        
-        data[:,index["intervention 0"]:index["intervention 0"] + INTERVENTIONS_NUM] = np.sum(self.daily_interventions,axis=2)
+        data[:,index["non-covid presenting"]] = self.non_covid_presenting
+        data[:,index["intervention 0"]:index["intervention 0"] + INTERVENTIONS_NUM] = np.sum(self.daily_interventions, axis=2)
         data[:,index["test 0 (-)"]:index["test 0 (-)"] + (2*TESTS_NUM)] = np.reshape(self.daily_tests, (-1, 2*TESTS_NUM))
         data[:,index["test costs"]:index["test costs"]+3] = self.costs
         data[:,index["test costs"]+3:index["test costs"]+3+RESOURCES_NUM] = self.daily_resource_utilization
-        data[:, -INTERVENTIONS_NUM:] = np.sum(self.daily_mortality, axis=1)
+        data[:,-INTERVENTIONS_NUM:] = np.sum(self.daily_mortality, axis=1)
         np.savetxt(file, data, fmt="%.6f", delimiter="\t", header=header)
         if state_detail:
             state_header = "\t".join(["day #"] + [f"{intv} while {dstate}" for intv in INTERVENTION_STRS for dstate in DISEASE_STATE_STRS])
@@ -60,4 +62,3 @@ class Outputs:
             state_data[:,0] = np.arange(np.size(data[:,0]))
             state_data[:,1:] = np.reshape(self.daily_interventions,(self.inputs.time_horizon, (INTERVENTIONS_NUM*DISEASE_STATES_NUM)))
             np.savetxt(state_detail, state_data, fmt="%.6f", delimiter="\t", header=state_header)
-

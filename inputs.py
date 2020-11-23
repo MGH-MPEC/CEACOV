@@ -9,15 +9,17 @@ import numpy as np
 import json
 from enums import *
 
+
 def dict_to_array(d):
     if type(d) is dict:
         return [dict_to_array(v) for v in list(d.values())]
     else:
         return d
 
+
 def normalized(a, axis=-1, order=2):
     l2 = np.atleast_1d(np.linalg.norm(a, order, axis))
-    l2[l2==0] = 1
+    l2[l2 == 0] = 1
     return a / np.expand_dims(l2, axis)
 
 
@@ -33,15 +35,32 @@ def generate_simulation_inputs():
 
 def generate_initialization_inputs():
     init_in = {
-        "transmission group dist": dict(zip(TRANSMISSION_GROUP_STRS, [1] + ([0] * (TRANSMISSION_GROUPS_NUM - 1)))),
-        "risk category dist":  {f"for {tgroup}": dict(zip(SUBPOPULATION_STRS, [1] + ([0] * (SUBPOPULATIONS_NUM - 1))))
-            for tgroup in TRANSMISSION_GROUP_STRS},
-        "initial disease dist": {f"for {tgroup}": dict(zip(DISEASE_STATE_STRS, [1] + ([0] * (DISEASE_STATES_NUM - 1))))
-            for tgroup in TRANSMISSION_GROUP_STRS},
-        "severity dist": {f"for {subpop}": dict(zip(DISEASE_PROGRESSION_STRS, [1] + ([0] * (DISEASE_PROGRESSIONS_NUM - 1))))
-            for subpop in SUBPOPULATION_STRS},
-        "start intervention": {f"for {tgroup}": 0
-            for tgroup in TRANSMISSION_GROUP_STRS}
+        "transmission group dist": {
+            TRANSMISSION_GROUP_STRS[tgroup]: 1 if tgroup == 0 else 0
+            for tgroup in TRANSMISSION_GROUPS
+        },
+        "risk category dist": {
+            f"for {tgroup}": {
+                SUBPOPULATION_STRS[subpop]: 1 if subpop == 0 else 0
+                for subpop in SUBPOPULATIONS
+            } for tgroup in TRANSMISSION_GROUP_STRS
+        },
+        "initial disease dist": {
+            f"for {tgroup}": {
+                DISEASE_STATE_STRS[dstate]: 1 if dstate == 0 else 0
+                for dstate in DISEASE_STATES
+            } for tgroup in TRANSMISSION_GROUP_STRS
+        },
+        "severity dist": {
+            f"for {subpop}": {
+                DISEASE_PROGRESSION_STRS[dprog]: 1 if dprog == 0 else 0
+                for dprog in DISEASE_PROGRESSIONS
+            } for subpop in SUBPOPULATION_STRS
+        },
+        "start intervention": {
+            f"for {tgroup}": 0
+            for tgroup in TRANSMISSION_GROUP_STRS
+        }
     }
     return init_in
 
@@ -50,21 +69,19 @@ def generate_progression_inputs():
     prog_in = {
         INTERVENTION_STRS[intv]: {
             f"for severity = {DISEASE_PROGRESSION_STRS[severity]}": {
-            
                 "daily disease progression probability": {
                     f"from {DISEASE_STATE_STRS[dstate]} to {DISEASE_STATE_STRS[PROGRESSION_PATHS[severity][dstate]]}": 0
-                        for dstate in DISEASE_STATES if (PROGRESSION_PATHS[severity][dstate] != -1)
-                    },
+                    for dstate in DISEASE_STATES if (PROGRESSION_PATHS[severity][dstate] != -1)
+                },
                 "daily switch to pre-recovery probability": {
                     f"from {DISEASE_STATE_STRS[dstate]}": 0
-                        for dstate in DISEASE_STATES if HAS_PRE_RECOVERY_STATE[severity][dstate]
-                    },
+                    for dstate in DISEASE_STATES if HAS_PRE_RECOVERY_STATE[severity][dstate]
+                },
                 "daily expedited recovery probability": {
                     f"from pre-recovery: {DISEASE_STATE_STRS[dstate]}": 0
-                        for dstate in DISEASE_STATES if HAS_PRE_RECOVERY_STATE[severity][dstate]
-                    },
+                    for dstate in DISEASE_STATES if HAS_PRE_RECOVERY_STATE[severity][dstate]
+                },
                 "initial immunity on recovery probability": 1
-                
             } for severity in DISEASE_PROGRESSIONS
         } for intv in INTERVENTIONS
     }
@@ -72,115 +89,171 @@ def generate_progression_inputs():
 
 
 def generate_mortality_inputs():
-    mort_in = {f"daily mortality prob for {subpop} while critical": {f"on {intv}": 0
-            for intv in INTERVENTION_STRS}
-        for subpop in SUBPOPULATION_STRS}
+    mort_in = {
+        f"daily mortality prob for {subpop} while critical": {
+            f"on {intv}": 0
+            for intv in INTERVENTION_STRS
+        } for subpop in SUBPOPULATION_STRS
+    }
     return mort_in
 
 
 def generate_transmission_inputs():
     transm_in = {
-    "transmission rate": {f"for {intv}": {f"while {dstate}": 0
-            for dstate in DISEASE_STATE_STRS[ASYMP:RECOVERED]}
-        for intv in INTERVENTION_STRS},
-    "rate multiplier thresholds": {f"t{threshold}": (10 + 10*threshold)
-        for threshold in range(T_RATE_PERIODS_NUM - 1)},
-    "rate multipliers": {threshold: {"for " + intv: 1
-            for intv in INTERVENTION_STRS}
-        for threshold in ["for 0 <= day# < t0"] +
-                          [f"for t{i} <= day# < t{i+1}" for i in range(T_RATE_PERIODS_NUM-2)] +
-                          [f"day# > t{T_RATE_PERIODS_NUM-2}"]},
-    "contact matrix":{f"for {intv}": {f"from {tgroup}": {f"to {igroup}": 1
-                for igroup in TRANSMISSION_GROUP_STRS}
-            for tgroup in TRANSMISSION_GROUP_STRS}
-        for intv in INTERVENTION_STRS}
+        "transmission rate": {
+            f"for {intv}": {
+                f"while {dstate}": 0
+                for dstate in DISEASE_STATE_STRS[ASYMP:RECOVERED]
+            } for intv in INTERVENTION_STRS
+        },
+        "rate multiplier thresholds": {
+            f"t{threshold}": (10 + (10 * threshold))
+            for threshold in range(T_RATE_PERIODS_NUM-1)
+        },
+        "rate multipliers": {
+            threshold: {
+                "for " + intv: 1
+                for intv in INTERVENTION_STRS}
+            for threshold in ["for 0 <= day# < t0"] +
+                             [f"for t{i} <= day# < t{i+1}" for i in range(T_RATE_PERIODS_NUM-2)] +
+                             [f"day# > t{T_RATE_PERIODS_NUM-2}"]
+        },
+        "contact matrix": {
+            f"for {intv}": {
+                f"from {tgroup}": {
+                    f"to {igroup}": 1
+                    for igroup in TRANSMISSION_GROUP_STRS
+                } for tgroup in TRANSMISSION_GROUP_STRS
+            } for intv in INTERVENTION_STRS
+        }
     }
     return transm_in
 
 
 def generate_test_inputs():
+    # general testing parameters
     testing_in = {
-    "test availability thresholds": {f"t{threshold}": (10 + 10*threshold)
-        for threshold in range(TEST_AVAILABILITY_PERIODS_NUM-1)},
-    "daily test availabilities": {threshold: {f"test {test}": 0
-            for test in TESTS}
-        for threshold in ["for 0 <= day# < t0"] +
-                          [f"for t{i} <= day# < t{i+1}" for i in range(TEST_AVAILABILITY_PERIODS_NUM-2)] +
-                          [f"day# > t{TEST_AVAILABILITY_PERIODS_NUM-2}"]}
+        "test availability thresholds": {
+            f"t{threshold}": (10 + (10 * threshold))
+            for threshold in range(TEST_AVAILABILITY_PERIODS_NUM-1)
+        },
+        "daily test availabilities": {
+            threshold: {
+                f"test {test}": 0
+                for test in TESTS
+            } for threshold in ["for 0 <= day# < t0"] +
+                             [f"for t{i} <= day# < t{i+1}" for i in range(TEST_AVAILABILITY_PERIODS_NUM-2)] +
+                             [f"day# > t{TEST_AVAILABILITY_PERIODS_NUM-2}"]}
     }
-    testing_in.update(
-        {f"test {test}": {
+    # specific test characteristics
+    testing_in.update({
+        f"test {test}": {
             "result return time": 0,
-            "probability of positive result": {interval: 0.0
-                for interval in TEST_CHAR_THRESHOLD_STRS},
-            "sensitivity thresholds": {f"t{threshold}": (5 + 5*threshold)
+            "probability of positive result": {
+                interval: 0.0
+                for interval in TEST_CHAR_THRESHOLD_STRS
+            },
+            "sensitivity thresholds": {
+                f"t{threshold}": (5 + (5 * threshold))
                 for threshold in range(TEST_SENS_THRESHOLDS_NUM)},
             "delay to test": 0
-            }
-        for test in TESTS}
-        )
+
+        } for test in TESTS
+    })
     return testing_in
 
 
 def generate_testing_strat_inputs():
-    test_strat_in = { 
-    INTERVENTION_STRS[n]: {
-        "probability of presenting to care": {f"while {dstate}": 0
-            for dstate in DISEASE_STATE_STRS},
-        "switch to intervention on positive test result": {f"if observed {symstate}": n
-            for symstate in OBSERVED_STATE_STRS},
-        "switch to intervention on negative test result": {f"if observed {symstate}": n
-            for symstate in OBSERVED_STATE_STRS},
-        "test number": {f"if observed {symstate}": 0
-            for symstate in OBSERVED_STATE_STRS},
-        "testing interval": {f"if observed {symstate}": 1
-            for symstate in OBSERVED_STATE_STRS},
-        "probability receive test": {f"if observed {symstate}": {f"for {subpop}": 0
-                for subpop in SUBPOPULATION_STRS}
-            for symstate in OBSERVED_STATE_STRS}
-        } for n in INTERVENTIONS}
+    test_strat_in = {
+        INTERVENTION_STRS[n]: {
+            "probability of presenting to care": {
+                f"while {dstate}": 0
+                for dstate in DISEASE_STATE_STRS},
+            "switch to intervention on positive test result": {
+                f"if observed {symstate}": n
+                for symstate in OBSERVED_STATE_STRS},
+            "switch to intervention on negative test result": {
+                f"if observed {symstate}": n
+                for symstate in OBSERVED_STATE_STRS},
+            "test number": {
+                f"if observed {symstate}": 0
+                for symstate in OBSERVED_STATE_STRS},
+            "testing interval": {
+                f"if observed {symstate}": 1
+                for symstate in OBSERVED_STATE_STRS},
+            "probability receive test": {
+                f"if observed {symstate}": {
+                    f"for {subpop}": 0
+                    for subpop in SUBPOPULATION_STRS}
+                for symstate in OBSERVED_STATE_STRS}
+        } for n in INTERVENTIONS
+    }
     return test_strat_in
+
 
 def generate_cost_inputs():
     cost_in = {
-        "testing costs": {f"test {test}": 0.0
-            for test in TESTS},
-        "daily intervention costs": {intervention: {f"if observed {symstate}": 0.0
-                    for symstate in OBSERVED_STATE_STRS}
-            for intervention in INTERVENTION_STRS},                                                    
-        "mortality costs": {intervention: 0.0
-            for intervention in INTERVENTION_STRS}
+        "testing costs": {
+            f"test {test}": 0.0
+            for test in TESTS
+        },
+        "daily intervention costs": {
+            intervention: {
+                f"if observed {symstate}": 0.0
+                for symstate in OBSERVED_STATE_STRS
+            } for intervention in INTERVENTION_STRS
+        },
+        "mortality costs": {
+            intervention: 0.0
+            for intervention in INTERVENTION_STRS
         }
+    }
     return cost_in
+
 
 def generate_resource_inputs():
     rsc_in = {
-    "resource availability thresholds": {f"t{threshold}": (10 + 10*threshold)
-        for threshold in range(RESOURCES_PERIODS_NUM - 1)},
-    "resource availabilities": {threshold: {resource: 0
-            for resource in RESOURCE_STRS}
-        for threshold in ["for 0 <= day# < t0"] +
-                          [f"for t{i} <= day# < t{i+1}" for i in range(RESOURCES_PERIODS_NUM-2)] +
-                          [f"day# > t{RESOURCES_PERIODS_NUM-2}"]},
-    "resource requirements":{f"for {intervention}":{f"if observed {symstate}": []
-            for symstate in OBSERVED_STATE_STRS}
-        for intervention in INTERVENTION_STRS},
-    "back-up interventions": {f"for {intervention}":{f"if observed {symstate}": 0
-            for symstate in OBSERVED_STATE_STRS}
-        for intervention in INTERVENTION_STRS}
+        "resource availability thresholds": {
+            f"t{threshold}": (10 + (10 * threshold))
+            for threshold in range(RESOURCES_PERIODS_NUM - 1)},
+        "resource availabilities": {
+            threshold: {
+                resource: 0
+                for resource in RESOURCE_STRS}
+            for threshold in ["for 0 <= day# < t0"] +
+                             [f"for t{i} <= day# < t{i+1}" for i in range(RESOURCES_PERIODS_NUM-2)] +
+                             [f"day# > t{RESOURCES_PERIODS_NUM-2}"]
+        },
+        "resource requirements": {
+            f"for {intervention}": {
+                f"if observed {symstate}": []
+                for symstate in OBSERVED_STATE_STRS}
+            for intervention in INTERVENTION_STRS},
+        "back-up interventions": {
+            f"for {intervention}": {
+                f"if observed {symstate}": 0
+                for symstate in OBSERVED_STATE_STRS}
+            for intervention in INTERVENTION_STRS}
     }
     return rsc_in
 
+
 def generate_non_covid_inputs():
     no_co_in = {
-    "daily prob present non-covid":{f"with {symstate} symptoms":{f"for {subpop}": 0.0
-            for subpop in SUBPOPULATION_STRS}
-        for symstate in OBSERVED_STATE_STRS[SYMP_MODERATE:SYMP_CRITICAL+1]},
-    "non covid symptom duration":{f"for {symstate} symptoms":{f"for {subpop}": 0
-            for subpop in SUBPOPULATION_STRS}
-        for symstate in OBSERVED_STATE_STRS[SYMP_MODERATE:SYMP_CRITICAL+1]},
+        "daily prob present non-covid": {
+            f"with {symstate} symptoms": {
+                f"for {subpop}": 0.0
+                for subpop in SUBPOPULATION_STRS}
+            for symstate in OBSERVED_STATE_STRS[SYMP_MODERATE:SYMP_CRITICAL+1]
+        },
+        "non covid symptom duration": {
+            f"for {symstate} symptoms": {
+                f"for {subpop}": 0
+                for subpop in SUBPOPULATION_STRS}
+            for symstate in OBSERVED_STATE_STRS[SYMP_MODERATE:SYMP_CRITICAL+1]},
     }
     return no_co_in
+
 
 def generate_prophylaxis_inputs():
     proph_in = {
@@ -190,15 +263,14 @@ def generate_prophylaxis_inputs():
         "initial coverage": 0,
         "time of target coverage": 20,
         "probability of dropout time thresholds": {
-            f"t{threshold}": (10 + 10*threshold)
-                for threshold in range(PROPH_DROPOUT_PERIODS_NUM-1)
+            f"t{threshold}": (10 + (10 * threshold))
+            for threshold in range(PROPH_DROPOUT_PERIODS_NUM-1)
         },
         "probability of dropout": {
             threshold: 0
-                for threshold in ["for 0 <= day# < t0"] +
-                                 [f"for t{i} <= day# < t{i+1}"
-                                    for i in range(PROPH_DROPOUT_PERIODS_NUM-2)] +
-                                 [f"day# > t{PROPH_DROPOUT_PERIODS_NUM-2}"]
+            for threshold in ["for 0 <= day# < t0"] +
+                             [f"for t{i} <= day# < t{i+1}" for i in range(PROPH_DROPOUT_PERIODS_NUM-2)] + 
+                             [f"day# > t{PROPH_DROPOUT_PERIODS_NUM-2}"]
         }
     }
     return proph_in
@@ -234,6 +306,7 @@ def generate_input_dict():
 
     return inputs
 
+
 class Inputs():
     def __init__(self):
         # simulation parameters
@@ -267,7 +340,7 @@ class Inputs():
         # intervention
         self.prob_present = np.zeros((INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         self.switch_on_test_result = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM, 2), dtype=int)
-        self.test_number = np.zeros((INTERVENTIONS_NUM,OBSERVED_STATES_NUM), dtype=int)
+        self.test_number = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=int)
         self.testing_frequency = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=int)
         self.prob_receive_test = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
         # cost inputs
@@ -286,7 +359,7 @@ class Inputs():
     def read_inputs(self, param_dict):
         if param_dict["model version"] != MODEL_VERSION:
             raise InvalidParamError("Inputs do not match model version")
-    
+
         # simulation parameters
         sim_params = param_dict["simulation parameters"]
         self.cohort_size = sim_params["cohort size"]
@@ -313,7 +386,7 @@ class Inputs():
                     self.initial_prob_immunity[intv, severity] = prog_array[intv][severity][3]
                     if (PROGRESSION_PATHS[severity,dstate] != -1):
                         if dstate == RECOVERED:
-                            self.progression_probs[intv,severity,RECOVERED,PROG_NORMAL] = prog_array[intv][severity][0][-1]
+                            self.progression_probs[intv, severity,RECOVERED, PROG_NORMAL] = prog_array[intv][severity][0][-1]
                         else:                        
                             self.progression_probs[intv,severity,dstate,PROG_NORMAL] = prog_array[intv][severity][0][dstate-INCUBATION]
                             if (dstate >= ASYMP) and (dstate - ASYMP < severity):
@@ -322,13 +395,13 @@ class Inputs():
         self.progression_probs[:,:,:,PROG_NONE] = 1 - np.sum(self.progression_probs, axis=3)
 
         self.mortality_probs[:,:] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
-        
+
         # transmission inputs
         transm_params = param_dict["transmissions"]
         trans_mults = np.asarray(dict_to_array(transm_params["rate multipliers"]), dtype=float)
         self.trans_prob[:,:,ASYMP:RECOVERED] = dict_to_array(transm_params["transmission rate"])
         self.contact_matrices = normalized(np.asarray(dict_to_array(transm_params["contact matrix"]), dtype=float), axis=2, order=1)
-      
+
         # apply transmission mults
         for i in range(T_RATE_PERIODS_NUM):
             for j in range(INTERVENTIONS_NUM):
@@ -398,4 +471,3 @@ def read_inputs(file):
         inputs = Inputs()
         inputs.read_inputs(param_dict)
         return inputs
-
