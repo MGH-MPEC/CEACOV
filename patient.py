@@ -240,7 +240,7 @@ class SimState:
                     if PROGRESSION_PATHS[progression][ds] != -1:
                         p = self.inputs.progression_probs[intv, progression, ds]
                         if ds == CRITICAL:  # can't forget surviorship bias!
-                            p = 1 - ((1 - p) * (1 - self.inputs.mortality_probs[subpop, intv, CRITICAL]))
+                            p = 1 - ((1 - p) * (1 - self.inputs.mortality_probs[subpop, intv]))
                         try:
                             patient[TIME_INFECTED] += np.random.geometric(p)
                         except ValueError:  # in case of 0 prob progression in debug runs, just ignore initialization
