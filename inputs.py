@@ -100,33 +100,35 @@ def generate_mortality_inputs():
 
 def generate_transmission_inputs():
     transm_in = {
-        "transmission rate": {
-            f"for {intv}": {
-                f"while {dstate}": 0
-                for dstate in DISEASE_STATE_STRS[ASYMP:RECOVERED]
-            } for intv in INTERVENTION_STRS
-        },
-        "rate multiplier thresholds": {
-            f"t{threshold}": (10 + (10 * threshold))
-            for threshold in range(T_RATE_PERIODS_NUM-1)
-        },
-        "rate multipliers": {
-            threshold: {
-                "for " + intv: 1
-                for intv in INTERVENTION_STRS}
-            for threshold in ["for 0 <= day# < t0"] +
-                             [f"for t{i} <= day# < t{i+1}" for i in range(T_RATE_PERIODS_NUM-2)] +
-                             [f"day# > t{T_RATE_PERIODS_NUM-2}"]
-        },
-        "contact matrix": {
-            f"for {intv}": {
+        INTERVENTION_STRS[n]: {
+            "transmission probability per exposure": {
+                f"for {tgroup}": {
+                    f"while {dstate}": 0
+                    for dstate in DISEASE_STATE_STRS[ASYMP:RECOVERED]
+                }
+                for tgroup in TRANSMISSION_GROUP_STRS
+            },
+            "transmission rate multipliers": {
+                threshold: 1
+                for threshold in ["for 0 <= day# < t0"] +
+                                 [f"for t{i} <= day# < t{i+1}" for i in range(T_RATE_PERIODS_NUM-2)] +
+                                 [f"day# > t{T_RATE_PERIODS_NUM-2}"]
+            },
+            "exposure matrix": {
                 f"from {tgroup}": {
                     f"to {igroup}": 1
-                    for igroup in TRANSMISSION_GROUP_STRS
-                } for tgroup in TRANSMISSION_GROUP_STRS
-            } for intv in INTERVENTION_STRS
-        }
+                    for igroup in TRANSMISSION_GROUP_STRS if igroup >= tgroup
+                }
+                for tgroup in TRANSMISSION_GROUP_STRS
+            }
+        } for n in INTERVENTIONS
     }
+    
+    transm_in["transmission multiplier time thresholds"] = {
+        f"t{threshold}": (10 + (10 * threshold))
+        for threshold in range(T_RATE_PERIODS_NUM-1)
+    }
+    
     return transm_in
 
 
@@ -168,24 +170,31 @@ def generate_testing_strat_inputs():
         INTERVENTION_STRS[n]: {
             "probability of presenting to care": {
                 f"while {dstate}": 0
-                for dstate in DISEASE_STATE_STRS},
+                for dstate in DISEASE_STATE_STRS
+            },
             "switch to intervention on positive test result": {
                 f"if observed {symstate}": n
-                for symstate in OBSERVED_STATE_STRS},
+                for symstate in OBSERVED_STATE_STRS
+            },
             "switch to intervention on negative test result": {
                 f"if observed {symstate}": n
-                for symstate in OBSERVED_STATE_STRS},
+                for symstate in OBSERVED_STATE_STRS
+            },
             "test number": {
                 f"if observed {symstate}": 0
-                for symstate in OBSERVED_STATE_STRS},
+                for symstate in OBSERVED_STATE_STRS
+            },
             "testing interval": {
                 f"if observed {symstate}": 1
-                for symstate in OBSERVED_STATE_STRS},
+                for symstate in OBSERVED_STATE_STRS
+            },
             "probability receive test": {
                 f"if observed {symstate}": {
                     f"for {subpop}": 0
-                    for subpop in SUBPOPULATION_STRS}
-                for symstate in OBSERVED_STATE_STRS}
+                    for subpop in SUBPOPULATION_STRS
+                }
+                for symstate in OBSERVED_STATE_STRS
+            }
         } for n in INTERVENTIONS
     }
     return test_strat_in
@@ -325,11 +334,13 @@ class Inputs():
         self.expedited_recovery_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         self.initial_prob_immunity = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=float)
+
         #transmission inputs
         self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
-        self.trans_prob = np.zeros((T_RATE_PERIODS_NUM, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=float)
+        self.trans_prob = np.zeros((T_RATE_PERIODS_NUM, INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, DISEASE_STATES_NUM), dtype=float)
         # transmissions from, transmissions to
-        self.contact_matrices = np.zeros((INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, TRANSMISSION_GROUPS_NUM), dtype=float)
+        self.exposure_matrices = np.zeros((INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, TRANSMISSION_GROUPS_NUM), dtype=float)
+
         # test inputs
         self.test_availability_thresholds = np.zeros((TEST_AVAILABILITY_PERIODS_NUM-1), dtype=int)
         self.test_availabilities = np.zeros((TEST_AVAILABILITY_PERIODS_NUM, TESTS_NUM), dtype=int)
@@ -398,16 +409,26 @@ class Inputs():
 
         # transmission inputs
         transm_params = param_dict["transmissions"]
-        trans_mults = np.asarray(dict_to_array(transm_params["rate multipliers"]), dtype=float)
-        self.trans_prob[:,:,ASYMP:RECOVERED] = dict_to_array(transm_params["transmission rate"])
-        self.contact_matrices = normalized(np.asarray(dict_to_array(transm_params["contact matrix"]), dtype=float), axis=2, order=1)
-
-        # apply transmission mults
-        for i in range(T_RATE_PERIODS_NUM):
-            for j in range(INTERVENTIONS_NUM):
-                self.trans_prob[i,j,:] *= trans_mults[i][j]
-
-        self.trans_rate_thresholds = np.asarray(dict_to_array(transm_params["rate multiplier thresholds"]))
+        self.trans_rate_thresholds = np.asarray(dict_to_array(transm_params["transmission multiplier time thresholds"]))
+        tgroups = self.tgroup_dist.copy()
+        tgroups[tgroups == 0] = 1
+        group_size_correction = np.outer(1 / tgroups, tgroups)
+        for i in INTERVENTIONS:
+            strat_dict = transm_params[INTERVENTION_STRS[i]]
+            self.trans_prob[:,i,:,ASYMP:RECOVERED] = dict_to_array(strat_dict["transmission probability per exposure"])
+            trans_mults = np.asarray(dict_to_array(strat_dict["transmission rate multipliers"]), dtype=float)
+            # apply transmission mults
+            for j in range(T_RATE_PERIODS_NUM):
+                self.trans_prob[j,i,:,:] *= trans_mults[j]
+            exposure_array = dict_to_array(strat_dict["exposure matrix"])
+            for tgroup in TRANSMISSION_GROUPS:
+                self.exposure_matrices[i, tgroup, tgroup:] = exposure_array[tgroup]
+                self.exposure_matrices[i,tgroup:,tgroup] = exposure_array[tgroup] * group_size_correction[tgroup:,tgroup]
+                # for igroup in TRANSMISSION_GROUPS:
+                #     if igroup >= tgroup:  # already read from inputs
+                #         break
+                #     else:  # calculate under symmetric contact assumption
+                #         self.exposure_matrices[i, tgroup, igroup] = self.exposure_matrices[i, igroup, tgroup] * group_size_correction[tgroup, igroup]
 
         # test inputs
         test_inputs = dict_to_array(param_dict["tests"])

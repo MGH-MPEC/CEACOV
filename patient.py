@@ -247,7 +247,7 @@ class SimState:
                             pass
 
             # transmissions for day 0
-            foi_contribution = self.inputs.trans_prob[0,patient[INTERVENTION],dstate] * self.inputs.contact_matrices[patient[INTERVENTION],patient[TRANSM_GROUP],:]
+            foi_contribution = self.inputs.trans_prob[0,patient[INTERVENTION],tgroup,dstate] * self.inputs.exposure_matrices[patient[INTERVENTION],patient[TRANSM_GROUP],:]
             self.transmissions[:] += foi_contribution
             # resources in use at init
             self.resource_utilization += np.unpackbits(self.inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
@@ -338,7 +338,7 @@ class SimState:
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
                 # calculate tomorrow's exposures
-                foi_contribution = inputs.trans_prob[trans_period, patient[INTERVENTION], patient[DISEASE_STATE]] * inputs.contact_matrices[patient[INTERVENTION], patient[TRANSM_GROUP], :]
+                foi_contribution = inputs.trans_prob[trans_period, patient[INTERVENTION], patient[TRANSM_GROUP], patient[DISEASE_STATE]] * inputs.exposure_matrices[patient[INTERVENTION], patient[TRANSM_GROUP], :]
                 newtransmissions[patient[TRANSM_GROUP], :] += foi_contribution
                 state_tracker[patient[SUBPOPULATION], patient[DISEASE_STATE]] += 1
                 intv_tracker[patient[INTERVENTION], patient[DISEASE_STATE]] += 1

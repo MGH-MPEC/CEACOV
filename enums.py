@@ -16,7 +16,7 @@ class InvalidParamError(Exception):
 
 # Meta Params
 
-MODEL_VERSION = "v0.8"
+MODEL_VERSION = "v0.9"
 
 
 # State var indices
