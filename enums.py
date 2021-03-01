@@ -21,16 +21,16 @@ MODEL_VERSION = "v0.9"
 
 # State var indices
 
-NUM_STATE_VARS = 11
+NUM_STATE_VARS = 13
 
-STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, TRANSM_GROUP, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_TEST_RETURN, TIME_INFECTED = range(NUM_STATE_VARS)
+STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, TRANSM_GROUP, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_SCREEN_RETURN, TIME_TO_CONF_TEST, TIME_TO_TEST_RETURN, TIME_INFECTED = range(NUM_STATE_VARS)
 
 
-# Flags (bitwise flags in powers of 2)
+# Flags (bitwise flags in powers of 2
 
-FLAGS_NUM = 7
+FLAGS_NUM = 9
 
-IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI, PRE_RECOVERY = map(lambda x: 2 ** x, range(FLAGS_NUM))
+IS_ALIVE, IS_INFECTED, PRESENTED_THIS_DSTATE, WAS_SX_SCREENED, PENDING_SCREEN_RESULT, HAS_PENDING_TEST, PENDING_TEST_RESULT, NON_COVID_RI, PRE_RECOVERY = map(lambda x: 2 ** x, range(FLAGS_NUM))
 
 
 # Demographic State
@@ -122,12 +122,13 @@ TESTS = range(TESTS_NUM)
 
 # Costs
 
-COST_STRS = ("test costs", "intervention costs", "mortality costs")
+COST_STRS = ("screen costs", "test costs", "intervention costs", "mortality costs")
 
 # Outcomes
 
 DAILY_OUTCOME_STRS = ["day#"] + list(DISEASE_STATE_STRS) + [f"cumulative {state}" for state in DISEASE_PROGRESSION_STRS] + \
                      [f"{igroup} new infections" for igroup in TRANSMISSION_GROUP_STRS] + ["cumulative infections", "dead"] + [f"mortality for {subpop}" for subpop in SUBPOPULATION_STRS] + \
                      [f"FoI {tgroup} -> {igroup}" for igroup in TRANSMISSION_GROUP_STRS for tgroup in TRANSMISSION_GROUP_STRS] + \
-                     ["non-covid presenting"] + list(INTERVENTION_STRS) +  [f"test {n} ({status})" for n in TESTS for status in ("-","+")] + list(COST_STRS) + \
+                     ["non-covid presenting"] + list(INTERVENTION_STRS) + [f"screen ({status})" for status in ("-","+")] +  [f"test {n} ({status})" for n in TESTS for status in ("-","+")] + list(COST_STRS) + \
                      [f"resource untilization {rsc}" for rsc in range(RESOURCES_NUM)] + [f"mortality on {intv}" for intv in INTERVENTION_STRS]
+

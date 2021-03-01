@@ -36,7 +36,16 @@ def prob_to_rate(prob):
 
 # helper functions for updating patient state
 
+def get_symptoms(patient):
+    """returns the symptoms corresponding to the patient's disease state"""
+    if patient[DISEASE_STATE] in DISEASE_STATES[MODERATE:RECUPERATION+1]:
+        return patient[DISEASE_STATE]-MODERATE+1
+    else:
+        return SYMP_ASYMP
+
+
 def roll_for_incidence(patient, transmissions, t_group_sizes):
+    """returns True if the patient becomes infected with COVID"""
     # need to convert to probability!
     tgroup = patient[TRANSM_GROUP]
     prob_exposure = rate_to_prob(transmissions[tgroup] / t_group_sizes[tgroup])
@@ -84,6 +93,7 @@ def roll_for_transition(patient, state_tracker, inputs):
 
 
 def roll_for_mortality(patient, inputs, resource_utilization):
+    """returns True and updates resource utilization if the patient dies"""
     prob_mort = inputs.mortality_probs[patient[SUBPOPULATION], patient[INTERVENTION]]
     if np.random.random() < prob_mort:
         patient[FLAGS] = patient[FLAGS] & (~IS_ALIVE)
@@ -94,47 +104,46 @@ def roll_for_mortality(patient, inputs, resource_utilization):
 
 
 def roll_for_presentation(patient, resource_use, resource_availability, inputs):
+    """if the patient presents to care, returns True and updates their observed state and related values"""
     if np.random.random() < inputs.prob_present[patient[INTERVENTION], patient[DISEASE_STATE]]:
         patient[FLAGS] = patient[FLAGS] | PRESENTED_THIS_DSTATE
         patient[FLAGS] = patient[FLAGS] & (~NON_COVID_RI)
         patient[OBSERVED_STATE_TIME] = 0
-        if patient[DISEASE_STATE] in DISEASE_STATES[MODERATE:RECUPERATION+1]:
-            new_obs_state = patient[DISEASE_STATE]-MODERATE+1
-            switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use, resource_availability)
-            patient[OBSERVED_STATE] = new_obs_state
-        else:
-            new_obs_state = SYMP_ASYMP
-            switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use, resource_availability)
-            patient[OBSERVED_STATE] = new_obs_state
+        new_obs_state = get_symptoms(patient)
+        switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use, resource_availability)
+        patient[OBSERVED_STATE] = new_obs_state
         return True
     else:
         return False
 
 
-def roll_for_testing(patient, test_counter, inputs):
-    if np.random.random() < inputs.prob_receive_test[patient[INTERVENTION], patient[OBSERVED_STATE], patient[SUBPOPULATION]]:
-        num = inputs.test_number[patient[INTERVENTION], patient[OBSERVED_STATE]]
+def roll_for_testing(patient, test_num, test_counter, inputs):
+    """returns True, determines the test result, and sets the delay to test return if the patient is tested"""
+    if ((patient[TIME_TO_CONF_TEST] == -1 and (np.random.random() < inputs.prob_receive_test[patient[INTERVENTION], patient[OBSERVED_STATE], patient[SUBPOPULATION]]) ) 
+        or (patient[TIME_TO_CONF_TEST] == 0 and np.random.random() < inputs.prob_confirmatory_test[patient[INTERVENTION]])):
         patient[FLAGS] = patient[FLAGS] | HAS_PENDING_TEST
         # get test characteristic time-from-infection interval
         time_period = TEST_SENS_THRESHOLDS_NUM + 1
         time_infected = patient[TIME_INFECTED]
         for i in range(TEST_SENS_THRESHOLDS_NUM + 1):
-            if time_infected < inputs.test_sens_thresholds[num, i]:
+            if time_infected < inputs.test_sens_thresholds[test_num, i]:
                 time_period = i
                 break
-        if np.random.random() < inputs.test_characteristics[num, time_period]:
+        # roll for test result, with probability of testing positive based on time infected
+        if np.random.random() < inputs.test_characteristics[test_num, time_period]:
             patient[FLAGS] = patient[FLAGS] | PENDING_TEST_RESULT
-            test_counter[num, 1] += 1
+            test_counter[test_num, 1] += 1
         else:
             patient[FLAGS] = patient[FLAGS] & ~PENDING_TEST_RESULT
-            test_counter[num, 0] += 1
-        patient[TIME_TO_TEST_RETURN] = inputs.test_return_delay[num]
+            test_counter[test_num, 0] += 1
+        patient[TIME_TO_TEST_RETURN] = inputs.test_return_delay[test_num]
         return True
     else:
         return False
 
 
 def switch_intervention(patient, inputs, new_intervention, new_obs_state, resource_utilization, resource_availability):
+    """updates patient intervention and resource utilization"""
     rec_reqs = inputs.resource_requirements
     # return resources to the pool
     resource_utilization -= np.unpackbits(rec_reqs[patient[INTERVENTION], patient[OBSERVED_STATE]])
@@ -173,6 +182,7 @@ class SimState:
 
         # accumulators
         self.cumulative_state_tracker = np.zeros(DISEASE_STATES_NUM, dtype=int)
+        self.screen_costs = np.zeros(OBSERVED_STATES_NUM, dtype=float)
         self.test_costs = np.zeros(TESTS_NUM, dtype=float)
         self.intervention_costs = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
         self.mortality_costs = 0
@@ -197,6 +207,7 @@ class SimState:
 
             intv = intv_dist[tgroup]
             patient[INTERVENTION] = intv
+            patient[TIME_TO_CONF_TEST] = -1
             # draw disease state
             dstate = np.random.choice(DISEASE_STATES_NUM, p=disease_dist[tgroup])
             patient[DISEASE_STATE] = dstate
@@ -262,6 +273,7 @@ class SimState:
         mort_tracker = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=int)
         intv_tracker = np.zeros((INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
         non_covid_present_dist = np.zeros(OBSERVED_STATES_NUM, dtype=float)
+        daily_screens = np.zeros(2, dtype=int)
         daily_tests = np.zeros((TESTS_NUM, 2), dtype=int)
         new_infections = np.zeros(TRANSMISSION_GROUPS_NUM, dtype=int)
         inputs = self.inputs
@@ -296,14 +308,47 @@ class SimState:
                     patient[OBSERVED_STATE_TIME] = 0
                     patient[FLAGS] = patient[FLAGS] & ~(NON_COVID_RI + PRESENTED_THIS_DSTATE)
                     self.non_covids -= 1
-
-            # update treatment/testing state
-            if (patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, resource_availability, inputs)) and (not patient[FLAGS] & HAS_PENDING_TEST):
+            # roll for symptom screen
+            if (~patient[FLAGS] & WAS_SX_SCREENED):
+                symptoms = get_symptoms(patient)
+                if (np.random.random() < inputs.prob_sx_screen[patient[INTERVENTION], symptoms, patient[SUBPOPULATION]]) and (self.day % inputs.screening_frequency[patient[INTERVENTION], symptoms] == 0):
+                    patient[FLAGS] = patient[FLAGS] | WAS_SX_SCREENED
+                    # roll for symptom screen result, with probability of positive screen based on symptoms
+                    if np.random.random() < inputs.screen_characteristics[symptoms]:
+                        patient[FLAGS] = patient[FLAGS] | PENDING_SCREEN_RESULT
+                        daily_screens[1] += 1
+                        # if they screened positive and are not already waiting for a confirmatory test, set the number of days until they will be tested
+                        if patient[TIME_TO_CONF_TEST] == -1:
+                            patient[TIME_TO_CONF_TEST] = inputs.confirmatory_test_lag[patient[INTERVENTION]]
+                    else:
+                        patient[FLAGS] = patient[FLAGS] & ~PENDING_SCREEN_RESULT
+                        daily_screens[0] += 1
+                    patient[TIME_TO_SCREEN_RETURN] = inputs.screen_return_delay
+                    self.screen_costs[symptoms] += inputs.screening_costs[symptoms]
+                if patient[FLAGS] & WAS_SX_SCREENED:
+                    if patient[TIME_TO_SCREEN_RETURN] == 0:
+                        result = bool(patient[FLAGS] & PENDING_SCREEN_RESULT)
+                        old_intv = patient[INTERVENTION]
+                        new_intv = inputs.switch_on_screen_result[patient[INTERVENTION], symptoms, int(result)]
+                        if new_intv != old_intv:
+                            switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization, resource_availability)       
+                        patient[FLAGS] = patient[FLAGS] & ~WAS_SX_SCREENED
+                    else:
+                        patient[TIME_TO_SCREEN_RETURN] -= 1
+            # update treatment/testing state             
+            if (patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, resource_availability, inputs)) and (not patient[FLAGS] & HAS_PENDING_TEST) :
                 test = inputs.test_number[patient[INTERVENTION], patient[OBSERVED_STATE]]
-                if (((patient[OBSERVED_STATE_TIME] - inputs.test_lag[test]) % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0) and 
-                    (test_availability[test] > np.sum(daily_tests[test]))):
-                    if roll_for_testing(patient, daily_tests, inputs):
+                time_past_delay = patient[OBSERVED_STATE_TIME] - inputs.test_lag[test]
+                # check whether they are eligible, either for the regular testing or the confirmatory test, based on delays, frequency, and availability
+                if (((time_past_delay >= 0 and time_past_delay % inputs.testing_frequency[patient[INTERVENTION]][patient[OBSERVED_STATE]] == 0) or patient[TIME_TO_CONF_TEST] == 0) and 
+                (test_availability[test] > np.sum(daily_tests[test]))):
+                    # roll for testing if eligible
+                    if roll_for_testing(patient, test, daily_tests, inputs):
                         self.test_costs[test] += inputs.testing_costs[test]
+                # continue the countdown to a confirmatory test if not tested today
+                if patient[TIME_TO_CONF_TEST] >= 0:
+                    patient[TIME_TO_CONF_TEST] -= 1
+
             if patient[FLAGS] & HAS_PENDING_TEST:
                 if patient[TIME_TO_TEST_RETURN] == 0:
                     # perform test return updates
@@ -311,6 +356,7 @@ class SimState:
                     result = bool(patient[FLAGS] & PENDING_TEST_RESULT)
                     old_intv = patient[INTERVENTION]
                     new_intv = inputs.switch_on_test_result[old_intv, patient[OBSERVED_STATE], int(result)]
+                    # switch intereventions if necessary and reset the observed state time
                     if new_intv != old_intv:
                         switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization, resource_availability)
                         patient[OBSERVED_STATE_TIME] = -1
@@ -349,7 +395,7 @@ class SimState:
                 self.mortality_costs += inputs.mortality_costs[patient[INTERVENTION]]
 
         costs = np.asarray([np.sum(self.test_costs), np.sum(self.intervention_costs), self.mortality_costs], dtype=float)
-        self.outputs.log_daily_state(self.day, state_tracker, self.cumulative_state_tracker, newtransmissions, new_infections, mort_tracker, intv_tracker, daily_tests, self.resource_utilization, self.non_covids, costs)
+        self.outputs.log_daily_state(self.day, state_tracker, self.cumulative_state_tracker, newtransmissions, new_infections, mort_tracker, intv_tracker, daily_screens, daily_tests, self.resource_utilization, self.non_covids, costs)
         self.transmissions = np.sum(newtransmissions, axis=0)
         self.day += 1
 

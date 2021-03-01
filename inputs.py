@@ -135,6 +135,11 @@ def generate_transmission_inputs():
 def generate_test_inputs():
     # general testing parameters
     testing_in = {
+        "symptom screen result return time": 0,
+        "probability of positive symptom screen result": {
+            f"if {symstate}": 0.0
+                for symstate in OBSERVED_STATE_STRS
+        },
         "test availability thresholds": {
             f"t{threshold}": (10 + (10 * threshold))
             for threshold in range(TEST_AVAILABILITY_PERIODS_NUM-1)
@@ -144,8 +149,8 @@ def generate_test_inputs():
                 f"test {test}": 0
                 for test in TESTS
             } for threshold in ["for 0 <= day# < t0"] +
-                             [f"for t{i} <= day# < t{i+1}" for i in range(TEST_AVAILABILITY_PERIODS_NUM-2)] +
-                             [f"day# > t{TEST_AVAILABILITY_PERIODS_NUM-2}"]}
+                    [f"for t{i} <= day# < t{i+1}" for i in range(TEST_AVAILABILITY_PERIODS_NUM-2)] +
+                    [f"day# > t{TEST_AVAILABILITY_PERIODS_NUM-2}"]}
     }
     # specific test characteristics
     testing_in.update({
@@ -168,6 +173,27 @@ def generate_test_inputs():
 def generate_testing_strat_inputs():
     test_strat_in = {
         INTERVENTION_STRS[n]: {
+            "switch to intervention on positive symptom screen result": {
+                f"if {symstate}": n
+                for symstate in OBSERVED_STATE_STRS
+            },
+            "switch to intervention on negative symptom screen result": {
+                f"if {symstate}": n
+                for symstate in OBSERVED_STATE_STRS
+            },
+            "screening interval": {
+                f"if {symstate}": 1
+                for symstate in OBSERVED_STATE_STRS
+            },
+            "probability receive symptom screen": {
+                f"if {symstate}": {
+                    f"for {subpop}": 0
+                    for subpop in SUBPOPULATION_STRS
+                }
+                for symstate in OBSERVED_STATE_STRS
+            },
+            "probability receive confirmatory test": 0,
+            "delay to confirmatory test": 0,
             "probability of presenting to care": {
                 f"while {dstate}": 0
                 for dstate in DISEASE_STATE_STRS
@@ -202,6 +228,10 @@ def generate_testing_strat_inputs():
 
 def generate_cost_inputs():
     cost_in = {
+        "screening cost": {
+            f"if {symstate}": 0.0
+            for symstate in OBSERVED_STATE_STRS
+        }, 
         "testing costs": {
             f"test {test}": 0.0
             for test in TESTS
@@ -341,7 +371,11 @@ class Inputs():
         # transmissions from, transmissions to
         self.exposure_matrices = np.zeros((INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, TRANSMISSION_GROUPS_NUM), dtype=float)
 
-        # test inputs
+        # test inputs, starting with the symptom screen and continuing to regular tests
+        self.prob_sx_screen = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
+        self.screen_characteristics = np.zeros((OBSERVED_STATES_NUM), dtype=float)
+        self.switch_on_screen_result = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM, 2), dtype=int)
+        self.screening_frequency = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=int)
         self.test_availability_thresholds = np.zeros((TEST_AVAILABILITY_PERIODS_NUM-1), dtype=int)
         self.test_availabilities = np.zeros((TEST_AVAILABILITY_PERIODS_NUM, TESTS_NUM), dtype=int)
         self.test_return_delay = np.zeros(TESTS_NUM, dtype=int)
@@ -354,7 +388,10 @@ class Inputs():
         self.test_number = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=int)
         self.testing_frequency = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=int)
         self.prob_receive_test = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
+        self.prob_confirmatory_test = np.zeros((INTERVENTIONS_NUM), dtype=float)
+        self.confirmatory_test_lag = np.zeros((INTERVENTIONS_NUM), dtype=int)
         # cost inputs
+        self.screening_costs = np.zeros(OBSERVED_STATES_NUM, dtype=float)
         self.testing_costs = np.zeros(TESTS_NUM, dtype=float)
         self.intervention_daily_costs = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
         self.mortality_costs = np.zeros((DISEASE_STATES_NUM, INTERVENTIONS_NUM), dtype=float)
@@ -366,7 +403,7 @@ class Inputs():
         # non-covid RI
         self.prob_present_non_covid = np.zeros((OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
         self.non_covid_ri_durations = np.zeros((OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
-
+ 
     def read_inputs(self, param_dict):
         if param_dict["model version"] != MODEL_VERSION:
             raise InvalidParamError("Inputs do not match model version")
@@ -432,29 +469,39 @@ class Inputs():
 
         # test inputs
         test_inputs = dict_to_array(param_dict["tests"])
-        self.test_availability_thresholds[:] = test_inputs[0]
-        self.test_availabilities[:,:] = test_inputs[1]
+        self.screen_return_delay = test_inputs[0]
+        self.screen_characteristics[:] = test_inputs[1]
+        self.test_availability_thresholds[:] = test_inputs[2]
+        self.test_availabilities[:,:] = test_inputs[3]
         for test in TESTS:
-            self.test_return_delay[test] = test_inputs[test+2][0]
-            self.test_characteristics[test,:] = test_inputs[test+2][1]
-            self.test_sens_thresholds[test,1:] = test_inputs[test+2][2]
-            self.test_lag[test] = test_inputs[test+2][3]
+            self.test_return_delay[test] = test_inputs[test+4][0]
+            self.test_characteristics[test,:] = test_inputs[test+4][1]
+            self.test_sens_thresholds[test,1:] = test_inputs[test+4][2]
+            self.test_lag[test] = test_inputs[test+4][3]
 
         # intervention strategies
         intv_strat_inputs =  param_dict["testing strategies"]
         for i in INTERVENTIONS:
             strat_dict = intv_strat_inputs[INTERVENTION_STRS[i]]
+            self.switch_on_screen_result[i,:,0] = dict_to_array(strat_dict["switch to intervention on negative symptom screen result"])
+            self.switch_on_screen_result[i,:,1] = dict_to_array(strat_dict["switch to intervention on positive symptom screen result"])
+            self.screening_frequency[i,:] = dict_to_array(strat_dict["screening interval"])
+            self.prob_sx_screen[i,:,:] = dict_to_array(strat_dict["probability receive symptom screen"])
+            self.prob_confirmatory_test[i] = strat_dict["probability receive confirmatory test"]
+            self.confirmatory_test_lag[i] = strat_dict["delay to confirmatory test"]
             self.prob_present[i,:] = dict_to_array(strat_dict["probability of presenting to care"])
             self.switch_on_test_result[i,:,0] = dict_to_array(strat_dict["switch to intervention on negative test result"])
             self.switch_on_test_result[i,:,1] = dict_to_array(strat_dict["switch to intervention on positive test result"])
             self.test_number[i,:] = dict_to_array(strat_dict["test number"])
             self.testing_frequency[i,:] = dict_to_array(strat_dict["testing interval"])
             self.prob_receive_test[i,:,:] = dict_to_array(strat_dict["probability receive test"])
+
         if np.any((self.switch_on_test_result < 0) | (self.switch_on_test_result >= INTERVENTIONS_NUM)):
             raise UserWarning("switch on test return inputs must be valid intervention numbers")
 
         # costs
         cost_inputs = param_dict["costs"]
+        self.screening_costs = np.asarray(dict_to_array(cost_inputs["screening cost"]))
         self.testing_costs = np.asarray(dict_to_array(cost_inputs["testing costs"]))
         self.intervention_daily_costs = np.asarray(dict_to_array(cost_inputs["daily intervention costs"]))
         self.mortality_costs = np.asarray(dict_to_array(cost_inputs["mortality costs"]))

@@ -16,6 +16,7 @@ class Outputs:
         self.cumulative_states = np.zeros((inputs.time_horizon, DISEASE_STATES_NUM), dtype=int)
         self.daily_mortality = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=int)
         self.daily_interventions = np.zeros((inputs.time_horizon, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
+        self.daily_screens = np.zeros((inputs.time_horizon, 2), dtype=int)
         self.daily_tests = np.zeros((inputs.time_horizon, TESTS_NUM, 2), dtype=int)
         self.daily_new_infections = np.zeros((inputs.time_horizon, TRANSMISSION_GROUPS_NUM), dtype=int)
         self.non_covid_presenting = np.zeros(inputs.time_horizon, dtype=int)
@@ -24,11 +25,12 @@ class Outputs:
         self.inputs = inputs
 
     # record statistics at end of day, called in step
-    def log_daily_state(self, day, states, cumulative, transmissions, infections, mortality, interventions, tests, resources, non_covid, costs):
+    def log_daily_state(self, day, states, cumulative, transmissions, infections, mortality, interventions, screens, tests, resources, non_covid, costs):
         self.daily_states[day, :, :] = states
         self.daily_transmission[day, :] = transmissions
         self.daily_new_infections[day, :] = infections
         self.daily_mortality[day, :, :] = mortality
+        self.daily_screens[day, :] = screens
         self.daily_tests[day,:] = tests
         self.daily_interventions[day,:,:] = interventions
         self.cumulative_states[day,:] = cumulative
@@ -51,6 +53,7 @@ class Outputs:
         data[:,index["FoI tn_group 0 -> tn_group 0"]:index["FoI tn_group 0 -> tn_group 0"] + (TRANSMISSION_GROUPS_NUM**2)] = np.reshape(np.swapaxes(self.daily_transmission, 1, 2), (-1, TRANSMISSION_GROUPS_NUM**2))
         data[:,index["non-covid presenting"]] = self.non_covid_presenting
         data[:,index["intervention 0"]:index["intervention 0"] + INTERVENTIONS_NUM] = np.sum(self.daily_interventions, axis=2)
+        data[:,index["screen (-)"]:index["screen (+)"]+1 ] = self.daily_screens
         data[:,index["test 0 (-)"]:index["test 0 (-)"] + (2*TESTS_NUM)] = np.reshape(self.daily_tests, (-1, 2*TESTS_NUM))
         data[:,index["test costs"]:index["test costs"]+3] = self.costs
         data[:,index["test costs"]+3:index["test costs"]+3+RESOURCES_NUM] = self.daily_resource_utilization
