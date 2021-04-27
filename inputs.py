@@ -28,7 +28,8 @@ def generate_simulation_inputs():
         "cohort size": 1000,
         "time horizon": 180,
         "fixed seed": True,
-        "detailed state outputs": False
+        "detailed state outputs": False,
+        "detailed vaccination outputs": False
     }
     return sim_in
 
@@ -45,13 +46,21 @@ def generate_initialization_inputs():
                 for subpop in SUBPOPULATIONS
             } for tgroup in TRANSMISSION_GROUP_STRS
         },
-        "initial disease dist": {
+        "immune states dist": {
             f"for {tgroup}": {
-                DISEASE_STATE_STRS[dstate]: 1 if dstate == 0 else 0
-                for dstate in DISEASE_STATES
+                IMMUNE_STATE_STRS[istate]: 1 if istate == 0 else 0
+                for istate in range(IMMUNE_STATES_NUM)
             } for tgroup in TRANSMISSION_GROUP_STRS
         },
-        "severity dist": {
+        "initial disease dist": {
+            f"for {tgroup}": {
+                f"for {istate}": {
+                    DISEASE_STATE_STRS[dstate]: 1 if dstate == 0 else 0
+                    for dstate in DISEASE_STATES
+                } for istate in IMMUNE_STATE_STRS
+            } for tgroup in TRANSMISSION_GROUP_STRS
+        },
+        "covid naive severity dist": {
             f"for {subpop}": {
                 DISEASE_PROGRESSION_STRS[dprog]: 1 if dprog == 0 else 0
                 for dprog in DISEASE_PROGRESSIONS
@@ -80,12 +89,40 @@ def generate_progression_inputs():
                 "daily expedited recovery probability": {
                     f"from pre-recovery: {DISEASE_STATE_STRS[dstate]}": 0
                     for dstate in DISEASE_STATES if HAS_PRE_RECOVERY_STATE[severity][dstate]
-                },
-                "initial immunity on recovery probability": 1
+                }
             } for severity in DISEASE_PROGRESSIONS
         } for intv in INTERVENTIONS
     }
     return prog_in
+
+
+def generate_immunity_inputs():
+    immunity_in = {
+        "vaccination to be given (-1 for no vaccine)": {
+            f"for {intv}": -1
+            for intv in INTERVENTION_STRS
+        }
+    }
+    immunity_in.update({
+        f"immunity parameters for {istate}": {
+            "initial prob full immunity": {
+                f"for {subpop}": 1
+                for subpop in SUBPOPULATION_STRS
+            },
+            "daily prob loss full immunity": {
+                f"for {subpop}": 0
+                for subpop in SUBPOPULATION_STRS
+            },
+            "partial immunity severity dist": {
+                f"for {subpop}": {
+                    DISEASE_PROGRESSION_STRS[dprog]: 1 if dprog == 0 else 0
+                    for dprog in DISEASE_PROGRESSIONS
+                } for subpop in SUBPOPULATION_STRS
+            },
+            "partial immunity transmission rate multiplier": 1
+        } for istate in IMMUNE_STATE_STRS[RECOVERED:]
+    })
+    return immunity_in
 
 
 def generate_mortality_inputs():
@@ -104,7 +141,7 @@ def generate_transmission_inputs():
             "transmission probability per exposure": {
                 f"for {tgroup}": {
                     f"while {dstate}": 0
-                    for dstate in DISEASE_STATE_STRS[ASYMP:RECOVERED]
+                    for dstate in DISEASE_STATE_STRS[ASYMP:IMMUNE]
                 }
                 for tgroup in TRANSMISSION_GROUP_STRS
             },
@@ -138,7 +175,7 @@ def generate_test_inputs():
         "symptom screen result return time": 0,
         "probability of positive symptom screen result": {
             f"if {symstate}": 0.0
-                for symstate in OBSERVED_STATE_STRS
+            for symstate in OBSERVED_STATE_STRS
         },
         "test availability thresholds": {
             f"t{threshold}": (10 + (10 * threshold))
@@ -149,8 +186,8 @@ def generate_test_inputs():
                 f"test {test}": 0
                 for test in TESTS
             } for threshold in ["for 0 <= day# < t0"] +
-                    [f"for t{i} <= day# < t{i+1}" for i in range(TEST_AVAILABILITY_PERIODS_NUM-2)] +
-                    [f"day# > t{TEST_AVAILABILITY_PERIODS_NUM-2}"]}
+                               [f"for t{i} <= day# < t{i+1}" for i in range(TEST_AVAILABILITY_PERIODS_NUM-2)] +
+                               [f"day# > t{TEST_AVAILABILITY_PERIODS_NUM-2}"]}
     }
     # specific test characteristics
     testing_in.update({
@@ -164,7 +201,6 @@ def generate_test_inputs():
                 f"t{threshold}": (5 + (5 * threshold))
                 for threshold in range(TEST_SENS_THRESHOLDS_NUM)},
             "delay to test": 0
-
         } for test in TESTS
     })
     return testing_in
@@ -328,6 +364,8 @@ def generate_input_dict():
     inputs["disease progression"] = generate_progression_inputs()
     # Mortality
     inputs["disease mortality"] = generate_mortality_inputs()
+    # Immunity
+    inputs["immunity"] = generate_immunity_inputs()
     # Transmissions
     inputs["transmissions"] = generate_transmission_inputs()
     # Tests
@@ -353,24 +391,28 @@ class Inputs():
         self.time_horizon = 180
         self.fixed_seed = True
         self.state_detail = False
+        self.vax_detail = False
         # initialization inputs
         self.tgroup_dist = np.zeros((TRANSMISSION_GROUPS_NUM), dtype=float)
         self.subpop_dist = np.zeros((TRANSMISSION_GROUPS_NUM, SUBPOPULATIONS_NUM), dtype=float)
-        self.dstate_dist = np.zeros((TRANSMISSION_GROUPS_NUM, DISEASE_STATES_NUM), dtype=float)
-        self.severity_dist = np.zeros((SUBPOPULATIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
+        self.istate_dist = np.zeros((TRANSMISSION_GROUPS_NUM, IMMUNE_STATES_NUM), dtype=float)
+        self.dstate_dist = np.zeros((TRANSMISSION_GROUPS_NUM, IMMUNE_STATES_NUM, DISEASE_STATES_NUM), dtype=float)
         self.start_intvs = np.zeros((TRANSMISSION_GROUPS_NUM), dtype=int)
         # transition inputs
         self.progression_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM, PROG_TYPES_NUM), dtype=float)
         self.expedited_recovery_probs = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM, DISEASE_STATES_NUM), dtype=float)
-        self.initial_prob_immunity = np.zeros((INTERVENTIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         self.mortality_probs = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=float)
-
-        #transmission inputs
+        # immunity inputs
+        self.vaccination = np.zeros(INTERVENTIONS_NUM, dtype=int)
+        self.prob_full_immunity = np.ones((IMMUNE_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
+        self.daily_prob_lose_immunity = np.zeros((IMMUNE_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
+        self.severity_dist = np.zeros((IMMUNE_STATES_NUM, SUBPOPULATIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
+        self.immunity_transm_mult = np.ones(IMMUNE_STATES_NUM, dtype=float)
+        # transmission inputs
         self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
         self.trans_prob = np.zeros((T_RATE_PERIODS_NUM, INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, DISEASE_STATES_NUM), dtype=float)
         # transmissions from, transmissions to
         self.exposure_matrices = np.zeros((INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, TRANSMISSION_GROUPS_NUM), dtype=float)
-
         # test inputs, starting with the symptom screen and continuing to regular tests
         self.prob_sx_screen = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
         self.screen_characteristics = np.zeros((OBSERVED_STATES_NUM), dtype=float)
@@ -414,13 +456,15 @@ class Inputs():
         self.time_horizon = sim_params["time horizon"]
         self.fixed_seed = sim_params["fixed seed"]
         self.state_detail = sim_params["detailed state outputs"]
+        self.vax_detail = sim_params["detailed vaccination outputs"]
 
         # initialization inputs
         init_params = param_dict["initial state"]
         self.tgroup_dist = np.asarray(dict_to_array(init_params["transmission group dist"]), dtype=float)
         self.subpop_dist = np.asarray(dict_to_array(init_params["risk category dist"]), dtype=float)
+        self.istate_dist = np.asarray(dict_to_array(init_params["immune status dist"]), dtype=float)
         self.dstate_dist = np.asarray(dict_to_array(init_params["initial disease dist"]), dtype=float)
-        self.severity_dist = np.asarray(dict_to_array(init_params["severity dist"]), dtype=float)
+        self.severity_dist[0] = np.asarray(dict_to_array(init_params["covid naive severity dist"]), dtype=float)
         self.start_intvs = np.asarray(dict_to_array(init_params["start intervention"]), dtype=int)
         if np.any((self.start_intvs < 0) | (self.start_intvs >= INTERVENTIONS_NUM)):
             raise UserWarning("start intervention inputs must be valid intervention numbers")
@@ -431,10 +475,9 @@ class Inputs():
         for intv in INTERVENTIONS:
             for severity in DISEASE_PROGRESSIONS:
                 for dstate in DISEASE_STATES:
-                    self.initial_prob_immunity[intv, severity] = prog_array[intv][severity][3]
                     if (PROGRESSION_PATHS[severity,dstate] != -1):
-                        if dstate == RECOVERED:
-                            self.progression_probs[intv, severity,RECOVERED, PROG_NORMAL] = prog_array[intv][severity][0][-1]
+                        if dstate == IMMUNE:
+                            self.progression_probs[intv, severity, IMMUNE, PROG_NORMAL] = prog_array[intv][severity][0][-1]
                         else:                        
                             self.progression_probs[intv,severity,dstate,PROG_NORMAL] = prog_array[intv][severity][0][dstate-INCUBATION]
                             if (dstate >= ASYMP) and (dstate - ASYMP < severity):
@@ -444,6 +487,15 @@ class Inputs():
 
         self.mortality_probs[:,:] = np.asarray(dict_to_array(param_dict["disease mortality"]), dtype=float)
 
+        # immunity inputs
+        imty_params = dict_to_array(param_dict["immunity"])
+        self.vaccination = np.asarray(imty_params[0])
+        for i_status in range(RECOVERED, IMMUNE_STATES_NUM):
+            self.prob_full_immunity[i_status,:] = imty_params[i_status][0]
+            self.daily_prob_lose_immunity[i_status,:] = imty_params[i_status][1]
+            self.severity_dist[i_status,:,:] = imty_params[i_status][2]
+            self.immunity_transm_mult[i_status] = imty_params[i_status][3]
+
         # transmission inputs
         transm_params = param_dict["transmissions"]
         self.trans_rate_thresholds = np.asarray(dict_to_array(transm_params["transmission multiplier time thresholds"]))
@@ -452,7 +504,7 @@ class Inputs():
         group_size_correction = np.outer(1 / tgroups, tgroups)
         for i in INTERVENTIONS:
             strat_dict = transm_params[INTERVENTION_STRS[i]]
-            self.trans_prob[:,i,:,ASYMP:RECOVERED] = dict_to_array(strat_dict["transmission probability per exposure"])
+            self.trans_prob[:,i,:,ASYMP:IMMUNE] = dict_to_array(strat_dict["transmission probability per exposure"])
             trans_mults = np.asarray(dict_to_array(strat_dict["transmission rate multipliers"]), dtype=float)
             # apply transmission mults
             for j in range(T_RATE_PERIODS_NUM):

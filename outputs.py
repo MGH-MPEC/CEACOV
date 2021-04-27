@@ -13,6 +13,7 @@ class Outputs:
     def __init__(self, inputs):
         self.daily_transmission = np.zeros((inputs.time_horizon, TRANSMISSION_GROUPS_NUM, TRANSMISSION_GROUPS_NUM), dtype=float)
         self.daily_states = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM, DISEASE_STATES_NUM), dtype=int)
+        self.daily_vax_status = np.zeros((inputs.time_horizon, IMMUNE_STATES_NUM, DISEASE_STATES_NUM+1))
         self.cumulative_states = np.zeros((inputs.time_horizon, DISEASE_STATES_NUM), dtype=int)
         self.daily_mortality = np.zeros((inputs.time_horizon, SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=int)
         self.daily_interventions = np.zeros((inputs.time_horizon, INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
@@ -25,7 +26,7 @@ class Outputs:
         self.inputs = inputs
 
     # record statistics at end of day, called in step
-    def log_daily_state(self, day, states, cumulative, transmissions, infections, mortality, interventions, screens, tests, resources, non_covid, costs):
+    def log_daily_state(self, day, states, cumulative, transmissions, infections, mortality, interventions, vax, screens, tests, resources, non_covid, costs):
         self.daily_states[day, :, :] = states
         self.daily_transmission[day, :] = transmissions
         self.daily_new_infections[day, :] = infections
@@ -33,12 +34,13 @@ class Outputs:
         self.daily_screens[day, :] = screens
         self.daily_tests[day,:] = tests
         self.daily_interventions[day,:,:] = interventions
+        self.daily_vax_status[day,:,:] = vax
         self.cumulative_states[day,:] = cumulative
         self.daily_resource_utilization[day,:] = resources
         self.non_covid_presenting[day] = non_covid
         self.costs[day] = costs
 
-    def write_outputs(self, file, state_detail=None):
+    def write_outputs(self, file, state_detail=None, vax_detail=None):
         outcomes = DAILY_OUTCOME_STRS
         header = "\t".join(outcomes)
         index = {outcome: index for index, outcome in enumerate(outcomes)}
@@ -65,3 +67,9 @@ class Outputs:
             state_data[:,0] = np.arange(np.size(data[:,0]))
             state_data[:,1:] = np.reshape(self.daily_interventions,(self.inputs.time_horizon, (INTERVENTIONS_NUM*DISEASE_STATES_NUM)))
             np.savetxt(state_detail, state_data, fmt="%.6f", delimiter="\t", header=state_header)
+        if vax_detail:
+            vax_header = "\t".join(["day #"] + [f"{status} while {istate}" for istate in IMMUNE_STATE_STRS for status in DISEASE_STATE_STRS + ("Dead",)])
+            vax_data = np.zeros( ( self.inputs.time_horizon, (IMMUNE_STATES_NUM*(DISEASE_STATES_NUM+1))+1 ), dtype=int)
+            vax_data[:,0] = np.arange(np.size(data[:,0]))
+            vax_data[:,1:] = np.reshape(self.daily_vax_status, ( self.inputs.time_horizon, IMMUNE_STATES_NUM*(DISEASE_STATES_NUM+1) ) )
+            np.savetxt(vax_detail, vax_data, fmt="%.6f", delimiter="\t", header=vax_header)

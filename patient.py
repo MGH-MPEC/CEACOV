@@ -62,11 +62,14 @@ def roll_for_transition(patient, state_tracker, inputs):
     dstate = patient[DISEASE_STATE]
     severity = patient[DISEASE_PROGRESSION]
     new_state = None
-
-    if patient[FLAGS] & PRE_RECOVERY:
-        # roll for pre-recovery -> recovered
+    if dstate == IMMUNE:
+        # roll to lose immunity
+        if np.random.random() < inputs.daily_prob_lose_immunity[patient[IMMUNE_STATE], patient[SUBPOPULATION]]:
+            new_state = SUSCEPTABLE
+    elif patient[FLAGS] & PRE_RECOVERY:
+        # roll for pre-recovery -> immune
         if np.random.random() < inputs.expedited_recovery_probs[intv, severity, dstate]:
-            new_state = RECOVERED
+            new_state = IMMUNE
             patient[FLAGS] = patient[FLAGS] & ~PRE_RECOVERY
     else:
         # roll for normal progression or pre-recovery
@@ -78,10 +81,13 @@ def roll_for_transition(patient, state_tracker, inputs):
             patient[FLAGS] = patient[FLAGS] | PRE_RECOVERY
 
     if new_state is not None:
-        if new_state == RECOVERED:
+        if new_state == IMMUNE:
             patient[FLAGS] = patient[FLAGS] & ~IS_INFECTED
-            # roll for immunity on recovery
-            if np.random.random() >= inputs.initial_prob_immunity[intv, severity]:
+            patient[IMMUNE_STATE] = RECOVERED
+            # re-roll severity
+            patient[DISEASE_PROGRESSION] = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=inputs.severity_dist[RECOVERED, patient[SUBPOPULATION]])
+            # check to see if full immunity "sticks"
+            if not (np.random.random() < inputs.prob_full_immunity[RECOVERED, patient[SUBPOPULATION]]):
                 new_state = SUSCEPTABLE
         # update patient
         patient[DISEASE_STATE] = new_state
@@ -103,14 +109,14 @@ def roll_for_mortality(patient, inputs, resource_utilization):
         return False
 
 
-def roll_for_presentation(patient, resource_use, resource_availability, inputs):
+def roll_for_presentation(patient, resource_use, resource_availability, state_tracker, inputs):
     """if the patient presents to care, returns True and updates their observed state and related values"""
     if np.random.random() < inputs.prob_present[patient[INTERVENTION], patient[DISEASE_STATE]]:
         patient[FLAGS] = patient[FLAGS] | PRESENTED_THIS_DSTATE
         patient[FLAGS] = patient[FLAGS] & (~NON_COVID_RI)
         patient[OBSERVED_STATE_TIME] = 0
         new_obs_state = get_symptoms(patient)
-        switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use, resource_availability)
+        switch_intervention(patient, inputs, patient[INTERVENTION], new_obs_state, resource_use, resource_availability, state_tracker)
         patient[OBSERVED_STATE] = new_obs_state
         return True
     else:
@@ -142,7 +148,7 @@ def roll_for_testing(patient, test_num, test_counter, inputs):
         return False
 
 
-def switch_intervention(patient, inputs, new_intervention, new_obs_state, resource_utilization, resource_availability):
+def switch_intervention(patient, inputs, new_intervention, new_obs_state, resource_utilization, resource_availability, state_tracker):
     """updates patient intervention and resource utilization"""
     rec_reqs = inputs.resource_requirements
     # return resources to the pool
@@ -158,8 +164,18 @@ def switch_intervention(patient, inputs, new_intervention, new_obs_state, resour
         if count >= INTERVENTIONS_NUM:
             raise UserWarning("No intervention available for the given resource constraints")
     resource_utilization += np.unpackbits(new_req)
-    patient[INTERVENTION] = new_intv
-    return True
+    if patient[INTERVENTION] != new_intv:
+        patient[INTERVENTION] = new_intv
+        vax = inputs.vaccination[new_intv]
+        if (0 <= vax < VACCINES_NUM) and not (patient[FLAGS] & IS_INFECTED):
+            new_istate = vax + 2
+            # set new immune state (linked to transmission)
+            patient[IMMUNE_STATE] = new_istate
+            # re-roll severity
+            patient[DISEASE_PROGRESSION] = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=inputs.severity_dist[new_istate, patient[SUBPOPULATION]])
+            # roll for full immunity
+            if np.random.random() < inputs.prob_full_immunity[new_istate, patient[SUBPOPULATION]]:
+                patient[DISEASE_STATE] = IMMUNE
 
 
 class SimState:
@@ -182,6 +198,7 @@ class SimState:
 
         # accumulators
         self.cumulative_state_tracker = np.zeros(DISEASE_STATES_NUM, dtype=int)
+        self.cumulative_vax_mortality = np.zeros(IMMUNE_STATES_NUM, dtype=int)
         self.screen_costs = np.zeros(OBSERVED_STATES_NUM, dtype=float)
         self.test_costs = np.zeros(TESTS_NUM, dtype=float)
         self.intervention_costs = np.zeros((INTERVENTIONS_NUM, OBSERVED_STATES_NUM), dtype=float)
@@ -189,6 +206,7 @@ class SimState:
 
         # save relevant dists as locals
         tgroup_dist = self.inputs.tgroup_dist
+        istate_dist = self.inputs.istate_dist
         subpop_dist = self.inputs.subpop_dist
         disease_dist = self.inputs.dstate_dist
         severity_dist = self.inputs.severity_dist
@@ -201,30 +219,28 @@ class SimState:
             tgroup = np.random.choice(TRANSMISSION_GROUPS_NUM, p=tgroup_dist)
             patient[TRANSM_GROUP] = tgroup
             self.transmission_groups[tgroup] += 1
-
+            istate = np.random.choice(IMMUNE_STATES_NUM, p=istate_dist[tgroup])
             subpop = np.random.choice(SUBPOPULATIONS_NUM, p=subpop_dist[tgroup])
             patient[SUBPOPULATION] = subpop
-
             intv = intv_dist[tgroup]
             patient[INTERVENTION] = intv
             patient[TIME_TO_CONF_TEST] = -1
             # draw disease state
-            dstate = np.random.choice(DISEASE_STATES_NUM, p=disease_dist[tgroup])
+            dstate = np.random.choice(DISEASE_STATES_NUM, p=disease_dist[tgroup, istate])
             patient[DISEASE_STATE] = dstate
             # initialize paths (even for susceptables)
-            progression = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=severity_dist[subpop])
+            progression = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=severity_dist[istate, subpop])
             patient[DISEASE_PROGRESSION] = progression
 
             # dstate specific updates
-
             if dstate == SUSCEPTABLE:
                 self.cumulative_state_tracker[SUSCEPTABLE] += 1
                 # patient[TIME_INFECTED] is already set to 0
 
-            elif dstate == RECOVERED:
+            elif dstate == IMMUNE:
                 self.cumulative_state_tracker[0:progression+3] += 1
-                self.cumulative_state_tracker[RECOVERED] += 1
-                patient[TIME_INFECTED] += np.random.randint(45)  # these are numbers from Pooyan, pretty arbitrary
+                self.cumulative_state_tracker[IMMUNE] += 1
+                patient[TIME_INFECTED] += np.random.randint(45)  # spread out initial time of infection
 
             elif dstate == INCUBATION:
                 patient[FLAGS] = patient[FLAGS] | IS_INFECTED
@@ -258,7 +274,9 @@ class SimState:
                             pass
 
             # transmissions for day 0
-            foi_contribution = self.inputs.trans_prob[0,patient[INTERVENTION],tgroup,dstate] * self.inputs.exposure_matrices[patient[INTERVENTION],patient[TRANSM_GROUP],:]
+            foi_contribution = self.inputs.trans_prob[0, patient[INTERVENTION], tgroup, dstate]
+            foi_contribution *= self.inputs.immunity_transm_mult[istate]
+            foi_contribution *= self.inputs.exposure_matrices[intv, tgroup, :]
             self.transmissions[:] += foi_contribution
             # resources in use at init
             self.resource_utilization += np.unpackbits(self.inputs.resource_requirements[patient[INTERVENTION], patient[OBSERVED_STATE]])
@@ -272,6 +290,7 @@ class SimState:
         state_tracker = np.zeros((SUBPOPULATIONS_NUM, DISEASE_STATES_NUM), dtype=float)
         mort_tracker = np.zeros((SUBPOPULATIONS_NUM, INTERVENTIONS_NUM), dtype=int)
         intv_tracker = np.zeros((INTERVENTIONS_NUM, DISEASE_STATES_NUM), dtype=int)
+        vax_tracker = np.zeros((IMMUNE_STATES_NUM, DISEASE_STATES_NUM+1), dtype=int)  # the +1 column is for mortality
         non_covid_present_dist = np.zeros(OBSERVED_STATES_NUM, dtype=float)
         daily_screens = np.zeros(2, dtype=int)
         daily_tests = np.zeros((TESTS_NUM, 2), dtype=int)
@@ -294,7 +313,7 @@ class SimState:
                     if np.random.random() < np.sum(non_covid_present_dist):
                         non_covid_present_dist = non_covid_present_dist / np.sum(non_covid_present_dist)
                         symptoms = np.random.choice(OBSERVED_STATES_NUM, p=non_covid_present_dist)
-                        switch_intervention(patient, inputs, patient[INTERVENTION], symptoms, self.resource_utilization, resource_availability)
+                        switch_intervention(patient, inputs, patient[INTERVENTION], symptoms, self.resource_utilization, resource_availability, state_tracker)
                         patient[NON_COVID_TIME] = inputs.non_covid_ri_durations[symptoms, patient[SUBPOPULATION]]
                         patient[OBSERVED_STATE] = symptoms
                         patient[OBSERVED_STATE_TIME] = 0
@@ -303,7 +322,7 @@ class SimState:
             else:  # has non-covid RI
                 patient[NON_COVID_TIME] -= 1 # countdown non-covid symptom duration
                 if (patient[NON_COVID_TIME] == 0) or (patient[FLAGS] & IS_INFECTED): # non-covid duration is up or *newly* infected COVID
-                    switch_intervention(patient, inputs, patient[INTERVENTION], SYMP_ASYMP, self.resource_utilization, resource_availability)
+                    switch_intervention(patient, inputs, patient[INTERVENTION], SYMP_ASYMP, self.resource_utilization, resource_availability, state_tracker)
                     patient[OBSERVED_STATE] = SYMP_ASYMP
                     patient[OBSERVED_STATE_TIME] = 0
                     patient[FLAGS] = patient[FLAGS] & ~(NON_COVID_RI + PRESENTED_THIS_DSTATE)
@@ -331,12 +350,12 @@ class SimState:
                         old_intv = patient[INTERVENTION]
                         new_intv = inputs.switch_on_screen_result[patient[INTERVENTION], symptoms, int(result)]
                         if new_intv != old_intv:
-                            switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization, resource_availability)       
+                            switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization, resource_availability, state_tracker)
                         patient[FLAGS] = patient[FLAGS] & ~WAS_SX_SCREENED
                     else:
                         patient[TIME_TO_SCREEN_RETURN] -= 1
             # update treatment/testing state             
-            if (patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, resource_availability, inputs)) and (not patient[FLAGS] & HAS_PENDING_TEST) :
+            if (patient[FLAGS] & PRESENTED_THIS_DSTATE or roll_for_presentation(patient, self.resource_utilization, resource_availability, state_tracker, inputs)) and (not patient[FLAGS] & HAS_PENDING_TEST):
                 test = inputs.test_number[patient[INTERVENTION], patient[OBSERVED_STATE]]
                 time_past_delay = patient[OBSERVED_STATE_TIME] - inputs.test_lag[test]
                 # check whether they are eligible, either for the regular testing or the confirmatory test, based on delays, frequency, and availability
@@ -358,7 +377,7 @@ class SimState:
                     new_intv = inputs.switch_on_test_result[old_intv, patient[OBSERVED_STATE], int(result)]
                     # switch intereventions if necessary and reset the observed state time
                     if new_intv != old_intv:
-                        switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization, resource_availability)
+                        switch_intervention(patient, inputs, new_intv, patient[OBSERVED_STATE], self.resource_utilization, resource_availability, state_tracker)
                         patient[OBSERVED_STATE_TIME] = -1
                 else:
                     patient[TIME_TO_TEST_RETURN] -= 1
@@ -384,18 +403,25 @@ class SimState:
             # update patient state tracking
             if patient[FLAGS] & IS_ALIVE:
                 # calculate tomorrow's exposures
-                foi_contribution = inputs.trans_prob[trans_period, patient[INTERVENTION], patient[TRANSM_GROUP], patient[DISEASE_STATE]] * inputs.exposure_matrices[patient[INTERVENTION], patient[TRANSM_GROUP], :]
+                foi_contribution = inputs.trans_prob[trans_period, patient[INTERVENTION], patient[TRANSM_GROUP], patient[DISEASE_STATE]]
+                foi_contribution *= inputs.immunity_transm_mult[patient[IMMUNE_STATE]]
+                foi_contribution *= inputs.exposure_matrices[patient[INTERVENTION], patient[TRANSM_GROUP], :]
                 newtransmissions[patient[TRANSM_GROUP], :] += foi_contribution
+
                 state_tracker[patient[SUBPOPULATION], patient[DISEASE_STATE]] += 1
                 intv_tracker[patient[INTERVENTION], patient[DISEASE_STATE]] += 1
+                vax_tracker[patient[IMMUNE_STATE], patient[DISEASE_STATE]] += 1
                 self.intervention_costs[patient[INTERVENTION], patient[OBSERVED_STATE]] += inputs.intervention_daily_costs[patient[INTERVENTION], patient[OBSERVED_STATE]]
 
             else:  # must have died this month
                 mort_tracker[patient[SUBPOPULATION], patient[INTERVENTION]] += 1
                 self.mortality_costs += inputs.mortality_costs[patient[INTERVENTION]]
+                self.cumulative_vax_mortality[patient[IMMUNE_STATE]] += 1
 
         costs = np.asarray([np.sum(self.test_costs), np.sum(self.intervention_costs), self.mortality_costs], dtype=float)
-        self.outputs.log_daily_state(self.day, state_tracker, self.cumulative_state_tracker, newtransmissions, new_infections, mort_tracker, intv_tracker, daily_screens, daily_tests, self.resource_utilization, self.non_covids, costs)
+        vax_tracker[:,-1] = self.cumulative_vax_mortality  # keep track of cumulative mortality by vax status
+
+        self.outputs.log_daily_state(self.day, state_tracker, self.cumulative_state_tracker, newtransmissions, new_infections, mort_tracker, intv_tracker, vax_tracker, daily_screens, daily_tests, self.resource_utilization, self.non_covids, costs)
         self.transmissions = np.sum(newtransmissions, axis=0)
         self.day += 1
 

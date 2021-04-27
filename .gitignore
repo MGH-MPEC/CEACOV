@@ -12,6 +12,7 @@
 **.json
 **.tsv
 # misc
+/env_ceacov/**
 **.DS_Store
 /test/**
 /spec/**

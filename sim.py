@@ -43,6 +43,9 @@ if __name__ == "__main__" or __name__ == "builtins":
             state_file = None
             if sim_state.inputs.state_detail:
                 state_file = os.path.join(results_directory, os.path.splitext(os.path.split(input_file)[1])[0] + "_state_data.tsv")
+            vax_file = None
+            if sim_state.inputs.state_detail:
+                vax_file = os.path.join(results_directory, os.path.splitext(os.path.split(input_file)[1])[0] + "_vaccine_data.tsv")
             print("running " + input_file)
             sim_state.run()
-            sim_state.outputs.write_outputs(out_file, state_file)
+            sim_state.outputs.write_outputs(out_file, state_file, vax_file)

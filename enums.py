@@ -16,14 +16,14 @@ class InvalidParamError(Exception):
 
 # Meta Params
 
-MODEL_VERSION = "v0.9_multTests"
 
+MODEL_VERSION = "v0.10"
 
 # State var indices
 
-NUM_STATE_VARS = 13
+NUM_STATE_VARS = 14
 
-STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, TRANSM_GROUP, OBSERVED_STATE, OBSERVED_STATE_TIME, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_SCREEN_RETURN, TIME_TO_CONF_TEST, TIME_TO_TEST_RETURN, TIME_INFECTED = range(NUM_STATE_VARS)
+STATE_VARS = FLAGS, NON_COVID_TIME, SUBPOPULATION, TRANSM_GROUP, OBSERVED_STATE, OBSERVED_STATE_TIME, IMMUNE_STATE, DISEASE_STATE, DISEASE_PROGRESSION, INTERVENTION, TIME_TO_SCREEN_RETURN, TIME_TO_CONF_TEST, TIME_TO_TEST_RETURN, TIME_INFECTED = range(NUM_STATE_VARS)
 
 
 # Flags (bitwise flags in powers of 2
@@ -52,13 +52,24 @@ TRANSMISSION_GROUP_STRS = [f"tn_group {n}" for n in range(TRANSMISSION_GROUPS_NU
 T_RATE_PERIODS_NUM = 5
 
 
+# IMMUNE STATE
+
+VACCINES_NUM = 3
+
+NAIVE, RECOVERED = range(2)
+
+IMMUNE_STATES_NUM = VACCINES_NUM + 2
+
+IMMUNE_STATE_STRS = ("naive", "recovered") + tuple([f"vaccine_{i}" for i in range(VACCINES_NUM)])
+
+
 # Covid Disease State
 
 DISEASE_STATES_NUM = 8
 
-DISEASE_STATES = SUSCEPTABLE, INCUBATION, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED = range(DISEASE_STATES_NUM)
+DISEASE_STATES = SUSCEPTABLE, INCUBATION, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, IMMUNE = range(DISEASE_STATES_NUM)
 
-DISEASE_STATE_STRS = ("susceptible", "pre-infectious incubation", "asymptomatic", "mild/moderate", "severe", "critical", "recuperation", "recovered")
+DISEASE_STATE_STRS = ("susceptible", "pre-infectious incubation", "asymptomatic", "mild/moderate", "severe", "critical", "recuperation", "immune")
 
 DISEASE_PROGRESSIONS_NUM = 4
 
@@ -66,10 +77,10 @@ DISEASE_PROGRESSIONS = TO_ASYMP, TO_MODERATE, TO_SEVERE, TO_CRITICAL = range(DIS
 
 DISEASE_PROGRESSION_STRS = ("asymptomatic", "mild/moderate", "severe", "critical")
 
-PROGRESSION_PATHS = np.array([[-1, ASYMP, RECOVERED, -1, -1, -1, -1, SUSCEPTABLE],
-                              [-1, ASYMP, MODERATE, RECOVERED, -1, -1, -1, SUSCEPTABLE],
-                              [-1, ASYMP, MODERATE, SEVERE, RECOVERED, -1, -1, SUSCEPTABLE],
-                              [-1, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, RECOVERED, SUSCEPTABLE]], dtype=int)
+PROGRESSION_PATHS = np.array([[-1, ASYMP, IMMUNE, -1, -1, -1, -1, -1],
+                              [-1, ASYMP, MODERATE, IMMUNE, -1, -1, -1, -1],
+                              [-1, ASYMP, MODERATE, SEVERE, IMMUNE, -1, -1, -1],
+                              [-1, ASYMP, MODERATE, SEVERE, CRITICAL, RECUPERATION, IMMUNE, -1]], dtype=int)
 
 HAS_PRE_RECOVERY_STATE = np.array([[0, 0, 0, 0, 0, 0, 0, 0],
                                    [0, 0, 1, 0, 0, 0, 0, 0],
