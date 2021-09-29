@@ -220,6 +220,7 @@ class SimState:
             patient[TRANSM_GROUP] = tgroup
             self.transmission_groups[tgroup] += 1
             istate = np.random.choice(IMMUNE_STATES_NUM, p=istate_dist[tgroup])
+            patient[IMMUNE_STATE] = istate
             subpop = np.random.choice(SUBPOPULATIONS_NUM, p=subpop_dist[tgroup])
             patient[SUBPOPULATION] = subpop
             intv = intv_dist[tgroup]

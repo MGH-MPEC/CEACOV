@@ -462,7 +462,7 @@ class Inputs():
         init_params = param_dict["initial state"]
         self.tgroup_dist = np.asarray(dict_to_array(init_params["transmission group dist"]), dtype=float)
         self.subpop_dist = np.asarray(dict_to_array(init_params["risk category dist"]), dtype=float)
-        self.istate_dist = np.asarray(dict_to_array(init_params["immune status dist"]), dtype=float)
+        self.istate_dist = np.asarray(dict_to_array(init_params["immune states dist"]), dtype=float)
         self.dstate_dist = np.asarray(dict_to_array(init_params["initial disease dist"]), dtype=float)
         self.severity_dist[0] = np.asarray(dict_to_array(init_params["covid naive severity dist"]), dtype=float)
         self.start_intvs = np.asarray(dict_to_array(init_params["start intervention"]), dtype=int)
