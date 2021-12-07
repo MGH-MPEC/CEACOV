@@ -119,7 +119,8 @@ def generate_immunity_inputs():
                     for dprog in DISEASE_PROGRESSIONS
                 } for subpop in SUBPOPULATION_STRS
             },
-            "partial immunity transmission rate multiplier": 1
+            "partial immunity transmission rate multiplier": 1,
+            "immune state transition on loss of full immunity": -1
         } for istate in IMMUNE_STATE_STRS[RECOVERED:]
     })
     return immunity_in
@@ -138,6 +139,10 @@ def generate_mortality_inputs():
 def generate_transmission_inputs():
     transm_in = {
         INTERVENTION_STRS[n]: {
+            "baseline daily infection probability": {
+                f"for {tgroup}": 0
+                for tgroup in TRANSMISSION_GROUP_STRS
+            },
             "transmission probability per exposure": {
                 f"for {tgroup}": {
                     f"while {dstate}": 0
@@ -408,7 +413,9 @@ class Inputs():
         self.daily_prob_lose_immunity = np.zeros((IMMUNE_STATES_NUM, SUBPOPULATIONS_NUM), dtype=float)
         self.severity_dist = np.zeros((IMMUNE_STATES_NUM, SUBPOPULATIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         self.immunity_transm_mult = np.ones(IMMUNE_STATES_NUM, dtype=float)
+        self.immunity_transition = np.full(IMMUNE_STATES_NUM, -1, dtype=int)
         # transmission inputs
+        self.baseline_infection_probs = np.zeros(TRANSMISSION_GROUPS_NUM, dtype=float)
         self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
         self.trans_prob = np.zeros((T_RATE_PERIODS_NUM, INTERVENTIONS_NUM, TRANSMISSION_GROUPS_NUM, DISEASE_STATES_NUM), dtype=float)
         # transmissions from, transmissions to
@@ -495,6 +502,10 @@ class Inputs():
             self.daily_prob_lose_immunity[i_status,:] = imty_params[i_status][1]
             self.severity_dist[i_status,:,:] = imty_params[i_status][2]
             self.immunity_transm_mult[i_status] = imty_params[i_status][3]
+            try:
+                self.immunity_transition[i_status] = imty_params[i_status][4]
+            except IndexError:
+                self.immunity_transition[i_status] = -1
 
         # transmission inputs
         transm_params = param_dict["transmissions"]
@@ -504,6 +515,10 @@ class Inputs():
         group_size_correction = np.outer(1 / tgroups, tgroups)
         for i in INTERVENTIONS:
             strat_dict = transm_params[INTERVENTION_STRS[i]]
+            try:
+                self.baseline_infection_probs = dict_to_array(strat_dict["baseline daily infection probability"])
+            except KeyError:
+                pass
             self.trans_prob[:,i,:,ASYMP:IMMUNE] = dict_to_array(strat_dict["transmission probability per exposure"])
             trans_mults = np.asarray(dict_to_array(strat_dict["transmission rate multipliers"]), dtype=float)
             # apply transmission mults

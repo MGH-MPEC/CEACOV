@@ -44,11 +44,12 @@ def get_symptoms(patient):
         return SYMP_ASYMP
 
 
-def roll_for_incidence(patient, transmissions, t_group_sizes):
+def roll_for_incidence(patient, transmissions, t_group_sizes, baseline_exposure):
     """returns True if the patient becomes infected with COVID"""
     # need to convert to probability!
     tgroup = patient[TRANSM_GROUP]
     prob_exposure = rate_to_prob(transmissions[tgroup] / t_group_sizes[tgroup])
+    prob_exposure = prob_exposure + baseline_exposure - (prob_exposure * baseline_exposure)
     if np.random.random() < prob_exposure:
         patient[FLAGS] = patient[FLAGS] | IS_INFECTED
         return True
@@ -81,14 +82,22 @@ def roll_for_transition(patient, state_tracker, inputs):
             patient[FLAGS] = patient[FLAGS] | PRE_RECOVERY
 
     if new_state is not None:
-        if new_state == IMMUNE:
-            patient[FLAGS] = patient[FLAGS] & ~IS_INFECTED
-            patient[IMMUNE_STATE] = RECOVERED
-            # re-roll severity
-            patient[DISEASE_PROGRESSION] = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=inputs.severity_dist[RECOVERED, patient[SUBPOPULATION]])
-            # check to see if full immunity "sticks"
-            if not (np.random.random() < inputs.prob_full_immunity[RECOVERED, patient[SUBPOPULATION]]):
-                new_state = SUSCEPTABLE
+        if new_state in {IMMUNE, SUSCEPTABLE}:
+            if new_state == IMMUNE: # recovered from disease
+                patient[FLAGS] = patient[FLAGS] & ~IS_INFECTED
+                new_istate = RECOVERED
+            else: # waning immunity
+                new_istate = inputs.immunity_transition[patient[IMMUNE_STATE]]
+            if new_istate != -1:  # included in case users do not want immune state transition on loss of full immunity
+                patient[IMMUNE_STATE] = new_istate
+                # re-roll severity
+                patient[DISEASE_PROGRESSION] = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=inputs.severity_dist[new_istate, patient[SUBPOPULATION]])
+                # check to see if full immunity "sticks"
+                if (np.random.random() < inputs.prob_full_immunity[RECOVERED, patient[SUBPOPULATION]]):
+                    new_state = IMMUNE
+                else:
+                    new_state = SUSCEPTABLE
+
         # update patient
         patient[DISEASE_STATE] = new_state
         state_tracker[new_state] += 1
@@ -390,7 +399,7 @@ class SimState:
                 patient[TIME_INFECTED] += 1
 
             if patient[DISEASE_STATE] == SUSCEPTABLE:
-                if roll_for_incidence(patient, self.transmissions, self.transmission_groups):
+                if roll_for_incidence(patient, self.transmissions, self.transmission_groups, self.inputs.baseline_infection_probs[patient[TRANSM_GROUP]]):
                     patient[DISEASE_STATE] = INCUBATION
                     patient[FLAGS] = patient[FLAGS] & (~PRESENTED_THIS_DSTATE)
                     patient[TIME_INFECTED] = 1
