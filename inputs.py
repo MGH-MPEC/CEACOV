@@ -503,7 +503,8 @@ class Inputs():
             self.severity_dist[i_status,:,:] = imty_params[i_status][2]
             self.immunity_transm_mult[i_status] = imty_params[i_status][3]
             try:
-                self.immunity_transition[i_status] = imty_params[i_status][4]
+                vax_num = imty_params[i_status][4]
+                self.immunity_transition[i_status] = (vax_num + 2) if (vax_num >= 0) else -1
             except IndexError:
                 self.immunity_transition[i_status] = -1
 

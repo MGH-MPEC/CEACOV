@@ -58,13 +58,13 @@ def roll_for_incidence(patient, transmissions, t_group_sizes, baseline_exposure)
 
 
 def roll_for_transition(patient, state_tracker, inputs):
-    """handles transitions except for incidence"""
+    """handles transitions except for incidence including immune transtion"""
     intv = patient[INTERVENTION]
     dstate = patient[DISEASE_STATE]
     severity = patient[DISEASE_PROGRESSION]
     new_state = None
-    if dstate == IMMUNE:
-        # roll to lose immunity
+    if dstate in {SUSCEPTABLE, IMMUNE}:
+        # roll to transition immunity
         if np.random.random() < inputs.daily_prob_lose_immunity[patient[IMMUNE_STATE], patient[SUBPOPULATION]]:
             new_state = SUSCEPTABLE
     elif patient[FLAGS] & PRE_RECOVERY:
