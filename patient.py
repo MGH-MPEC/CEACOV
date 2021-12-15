@@ -93,7 +93,7 @@ def roll_for_transition(patient, state_tracker, inputs):
                 # re-roll severity
                 patient[DISEASE_PROGRESSION] = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=inputs.severity_dist[new_istate, patient[SUBPOPULATION]])
                 # check to see if full immunity "sticks"
-                if (np.random.random() < inputs.prob_full_immunity[RECOVERED, patient[SUBPOPULATION]]):
+                if (np.random.random() < inputs.prob_full_immunity[new_istate, patient[SUBPOPULATION]]):
                     new_state = IMMUNE
                 else:
                     new_state = SUSCEPTABLE
