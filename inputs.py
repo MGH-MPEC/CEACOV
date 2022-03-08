@@ -120,7 +120,8 @@ def generate_immunity_inputs():
                 } for subpop in SUBPOPULATION_STRS
             },
             "partial immunity transmission rate multiplier": 1,
-            "immune state transition on loss of full immunity": -1
+            "immune state transition on loss of full immunity": -1,
+            "immune state priority": 0
         } for istate in IMMUNE_STATE_STRS[RECOVERED:]
     })
     return immunity_in
@@ -414,6 +415,7 @@ class Inputs():
         self.severity_dist = np.zeros((IMMUNE_STATES_NUM, SUBPOPULATIONS_NUM, DISEASE_PROGRESSIONS_NUM), dtype=float)
         self.immunity_transm_mult = np.ones(IMMUNE_STATES_NUM, dtype=float)
         self.immunity_transition = np.full(IMMUNE_STATES_NUM, -1, dtype=int)
+        self.immunity_priority = np.full(IMMUNE_STATES_NUM, 0, dtype=int)
         # transmission inputs
         self.baseline_infection_probs = np.zeros(TRANSMISSION_GROUPS_NUM, dtype=float)
         self.trans_rate_thresholds = np.zeros(T_RATE_PERIODS_NUM-1, dtype=int)
@@ -505,8 +507,10 @@ class Inputs():
             try:
                 vax_num = imty_params[i_status][4]
                 self.immunity_transition[i_status] = (vax_num + 2) if (vax_num >= 0) else -1
+                self.immunity_priority[i_status] = imty_params[i_status][5]
             except IndexError:
                 self.immunity_transition[i_status] = -1
+                self.immunity_priority[i_status] = 0
 
         # transmission inputs
         transm_params = param_dict["transmissions"]

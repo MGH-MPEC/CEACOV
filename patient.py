@@ -81,22 +81,27 @@ def roll_for_transition(patient, state_tracker, inputs):
             # transitioning to pre-rec, no state change
             patient[FLAGS] = patient[FLAGS] | PRE_RECOVERY
 
-    if new_state is not None:
-        if new_state in {IMMUNE, SUSCEPTABLE}:
-            if new_state == IMMUNE: # recovered from disease
-                patient[FLAGS] = patient[FLAGS] & ~IS_INFECTED
-                new_istate = RECOVERED
-            else: # waning immunity
-                new_istate = inputs.immunity_transition[patient[IMMUNE_STATE]]
-            if new_istate != -1:  # included in case users do not want immune state transition on loss of full immunity
-                patient[IMMUNE_STATE] = new_istate
-                # re-roll severity
-                patient[DISEASE_PROGRESSION] = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=inputs.severity_dist[new_istate, patient[SUBPOPULATION]])
-                # check to see if full immunity "sticks"
-                if (np.random.random() < inputs.prob_full_immunity[new_istate, patient[SUBPOPULATION]]):
-                    new_state = IMMUNE
-                else:
-                    new_state = SUSCEPTABLE
+    # immunity updates
+    new_istate = -1
+    # recovered from disease
+    if new_state == IMMUNE:
+        patient[FLAGS] = patient[FLAGS] & ~IS_INFECTED
+        # Check priority!
+        if (inputs.immunity_priority[patient[IMMUNE_STATE]] <= inputs.immunity_priority[RECOVERED]):
+            new_istate = RECOVERED
+    # waning immunity
+    if new_state == SUSCEPTABLE:
+        new_istate = inputs.immunity_transition[patient[IMMUNE_STATE]]
+    # istate transition
+    if new_istate != -1:
+        patient[IMMUNE_STATE] = new_istate
+        # re-roll severity
+        patient[DISEASE_PROGRESSION] = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=inputs.severity_dist[new_istate, patient[SUBPOPULATION]])
+        # check to see if full immunity "sticks"
+        if (np.random.random() < inputs.prob_full_immunity[new_istate, patient[SUBPOPULATION]]):
+            new_state = IMMUNE
+        else:
+            new_state = SUSCEPTABLE
 
         # update patient
         patient[DISEASE_STATE] = new_state
@@ -173,10 +178,13 @@ def switch_intervention(patient, inputs, new_intervention, new_obs_state, resour
         if count >= INTERVENTIONS_NUM:
             raise UserWarning("No intervention available for the given resource constraints")
     resource_utilization += np.unpackbits(new_req)
+    # vaccination
     if patient[INTERVENTION] != new_intv:
         patient[INTERVENTION] = new_intv
         vax = inputs.vaccination[new_intv]
-        if (0 <= vax < VACCINES_NUM) and not (patient[FLAGS] & IS_INFECTED):
+        if ( (0 <= vax < VACCINES_NUM)
+             and (inputs.immunity_priority[patient[IMMUNE_STATE]] <= inputs.immunity_priority[vax])
+             and not (patient[FLAGS] & IS_INFECTED) ):
             new_istate = vax + 2
             # set new immune state (linked to transmission)
             patient[IMMUNE_STATE] = new_istate
