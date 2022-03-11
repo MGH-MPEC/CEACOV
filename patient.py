@@ -59,10 +59,12 @@ def roll_for_incidence(patient, transmissions, t_group_sizes, baseline_exposure)
 
 def roll_for_transition(patient, state_tracker, inputs):
     """handles transitions except for incidence including immune transtion"""
+    
     intv = patient[INTERVENTION]
     dstate = patient[DISEASE_STATE]
     severity = patient[DISEASE_PROGRESSION]
     new_state = None
+    
     if dstate in {SUSCEPTABLE, IMMUNE}:
         # roll to transition immunity
         if np.random.random() < inputs.daily_prob_lose_immunity[patient[IMMUNE_STATE], patient[SUBPOPULATION]]:
@@ -80,30 +82,30 @@ def roll_for_transition(patient, state_tracker, inputs):
         elif trans_type == PROG_PRE_REC:
             # transitioning to pre-rec, no state change
             patient[FLAGS] = patient[FLAGS] | PRE_RECOVERY
-
-    # immunity updates
-    new_istate = -1
-    # recovered from disease
-    if new_state == IMMUNE:
-        patient[FLAGS] = patient[FLAGS] & ~IS_INFECTED
-        # Check priority!
-        if (inputs.immunity_priority[patient[IMMUNE_STATE]] <= inputs.immunity_priority[RECOVERED]):
-            new_istate = RECOVERED
-    # waning immunity
-    if new_state == SUSCEPTABLE:
-        new_istate = inputs.immunity_transition[patient[IMMUNE_STATE]]
-    # istate transition
-    if new_istate != -1:
-        patient[IMMUNE_STATE] = new_istate
-        # re-roll severity
-        patient[DISEASE_PROGRESSION] = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=inputs.severity_dist[new_istate, patient[SUBPOPULATION]])
-        # check to see if full immunity "sticks"
-        if (np.random.random() < inputs.prob_full_immunity[new_istate, patient[SUBPOPULATION]]):
-            new_state = IMMUNE
-        else:
-            new_state = SUSCEPTABLE
-
-        # update patient
+    
+    # update patient if transition
+    if new_state is not None:
+        new_istate = -1
+        # recovered from disease updates
+        if new_state == IMMUNE:
+            patient[FLAGS] = patient[FLAGS] & ~IS_INFECTED
+            # Check priority!
+            if (inputs.immunity_priority[patient[IMMUNE_STATE]] <= inputs.immunity_priority[RECOVERED]):
+                new_istate = RECOVERED
+        # waning immunity updates
+        if new_state == SUSCEPTABLE:
+            new_istate = inputs.immunity_transition[patient[IMMUNE_STATE]]
+        # istate transition
+        if new_istate != -1:
+            patient[IMMUNE_STATE] = new_istate
+            # re-roll severity
+            patient[DISEASE_PROGRESSION] = np.random.choice(DISEASE_PROGRESSIONS_NUM, p=inputs.severity_dist[new_istate, patient[SUBPOPULATION]])
+            # check to see if full immunity "sticks"
+            if (np.random.random() < inputs.prob_full_immunity[new_istate, patient[SUBPOPULATION]]):
+                new_state = IMMUNE
+            else:
+                new_state = SUSCEPTABLE
+        # dstate transition
         patient[DISEASE_STATE] = new_state
         state_tracker[new_state] += 1
         patient[FLAGS] = patient[FLAGS] & ~PRESENTED_THIS_DSTATE
